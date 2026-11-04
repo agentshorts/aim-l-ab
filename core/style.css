@@ -1,5 +1,0 @@
-html,body{margin:0;height:100%;overflow:hidden;background:#111;font:13px sans-serif;color:#eee}
-canvas{display:block;width:100vw;height:100vh}
-.card{position:fixed;top:10px;left:10px;max-width:380px;background:#000a;padding:10px;border-radius:6px;line-height:1.4}
-.hud{position:fixed;bottom:10px;left:10px;font:14px monospace}
-.cross{position:fixed;left:50%;top:50%;width:4px;height:4px;margin:-2px;background:#fff;border-radius:2px;pointer-events:none}

@@ -1,3 +1,8 @@
 import { build } from "esbuild";
-for (const d of ["deadlock-souls", "deadlock-tracking"]) await build({ entryPoints: [`drills/${d}/main.ts`], bundle: true, outfile: `dist/${d}.js`, target: "es2020", minify: true });
-await build({ entryPoints: ["tests/unit.ts"], bundle: true, platform: "node", outfile: "dist/unit.cjs", format: "cjs" });
+import { mkdirSync, copyFileSync, writeFileSync } from "fs";
+// Output: dist/aimlab.js (single IIFE bundle, CSS inlined) + dist/assets/fonts. Drop dist/ into assets/js/aim-trainer/.
+mkdirSync("dist/assets/fonts", { recursive: true });
+await build({ entryPoints: ["core/app.ts"], bundle: true, outfile: "dist/aimlab.js", target: "es2020", minify: true, format: "iife", loader: { ".css": "text" }, legalComments: "eof" });
+for (const f of ["Oswald-Variable.ttf", "OFL_Oswald.txt"]) copyFileSync(`assets/fonts/${f}`, `dist/assets/fonts/${f}`);
+writeFileSync("dist/index.html", `<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Aim Lab</title></head><body><div id="aimlab" data-aimlab-mount></div><script src="aimlab.js"></script></body></html>`);
+await build({ entryPoints: ["tests/unit.ts"], bundle: true, platform: "node", outfile: "dist/unit.cjs", format: "cjs", loader: { ".css": "text" } });

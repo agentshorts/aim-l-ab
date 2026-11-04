@@ -1,6 +1,8 @@
-export interface Settings { cm360: number; dpi: number; difficulty: number; }
-const KEY = "aimlab.settings.v1";
-export function load(): Settings { try { return { cm360: 35, dpi: 800, difficulty: 2, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch { return { cm360: 35, dpi: 800, difficulty: 2 }; } }
-export function save(s: Settings) { localStorage.setItem(KEY, JSON.stringify(s)); }
-// radians per mouse count: 360 deg per (cm360 cm) at dpi counts/inch
-export function radPerCount(s: Settings) { return (2 * Math.PI) / ((s.cm360 / 2.54) * s.dpi); }
+export interface Settings { cm360: number; dpi: number; fov: number; difficulty: number; rawInput: boolean; durationS: number; }
+export const DEFAULTS: Settings = { cm360: 35, dpi: 800, fov: 90, difficulty: 1, rawInput: true, durationS: 60 };
+export function normalize(x: any): Settings {
+  const s = { ...DEFAULTS, ...(x || {}) };
+  const clamp = (v: any, lo: number, hi: number, d: number) => (Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : d);
+  s.cm360 = clamp(s.cm360, 1, 300, 35); s.dpi = clamp(s.dpi, 100, 32000, 800); s.fov = clamp(s.fov, 60, 120, 90);
+  s.difficulty = Math.round(clamp(s.difficulty, 0, 3, 1)); s.durationS = clamp(s.durationS, 15, 300, 60); s.rawInput = !!s.rawInput; return s;
+}
