@@ -1,0 +1,209 @@
+import * as THREE from "three";
+import { SFX } from "../core/sfx_synth";
+import { readFileSync } from "fs";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { LEVEL_DEFS, LEVEL_ORDER, pathPoint, pathLen, pathYaw, pathModes, aimAngles, levelSolids, blocked, freePoint, pathCables, unstick } from "../drills/deadlock-tracking/levels";
+import { HERO_WEAPONS, heroWeapon, Weapon } from "../core/heroes";
+import { MODEL_NAMES, MODEL_VERSION, stripRootMotion, fixStrips } from "../core/models";
+import { clipFor, facingFor } from "../drills/deadlock-tracking/dummy";
+import { PROFILES, sampleQ } from "../drills/deadlock-tracking/profile";
+import { trooperFeedback, DMG as SOUL_DMG } from "../drills/deadlock-souls/feedback";
+import { labelLayout, LABEL_LANES, LANE_PX, Item } from "../core/fx";
+import { normalize as norm2, CUE_KEYS as CK } from "../core/settings";
+import { SoulSim } from "../drills/deadlock-souls/sim";
+import { Mover } from "../drills/deadlock-tracking/mover";
+import { MOVE, TROOPER, ORB } from "../core/spec";
+import { FreeMover, FREE_RATES, EVADE_AFTER, STAMINA } from "../core/freemove";
+import { StreakKeeper, GRACE_SWITCH_S } from "../core/streak";
+import { humParams, HUM_STEPS } from "../core/audio";
+import { CoverSim, Peek, DIFFS, ROWS, PEEK_S } from "../drills/deadlock-cover-fire/sim";
+import { cm360ToDeadlockSens, deadlockSensToCm360, radPerCountFromCm360 } from "../core/sens";
+import { parseShare, loadCrosshair, DEFAULT_CROSSHAIR, toShare, CROSSHAIR_KEY, pipOffset } from "../core/crosshair";
+import { Session } from "../core/session";
+import { LocalStore } from "../core/storage";
+let fails = 0; const ok = (name: string, c: boolean, info = "") => { console.log(`${c ? "PASS" : "FAIL"} ${name} ${info}`); if (!c) fails++; };
+const near = (a: number, b: number, e = 1e-6) => Math.abs(a - b) <= e;
+const p1 = (async () => {
+{ const s = new SoulSim({ perSide: 1, variance: 0, playerDamage: 40, oppReact: 5, seed: 1 }); const e = s.troopers[1];
+  s.step(0.5); ok("trooper HP drop per tick = 35 dps * 0.5 s = 17.5", near(e.hp, 300 - 17.5), `hp=${e.hp}`);
+  for (let i = 0; i < 2000 && e.alive; i++) s.step(0.01); ok("ranged 300 hp dies at 9.0 s (18 ticks)", near(s.t, 9.0, 0.011), `t=${s.t.toFixed(3)}`);
+  ok("orb spawns on death, floating share 50 of 100", s.orbs.some((o) => o.owner === "ally") && TROOPER.bounty0 * TROOPER.floatingShare === 50);
+  ok("wave phase cleared, respawns after delay", s.wave === "cleared"); for (let i = 0; i < 200; i++) s.step(0.01); ok("new wave spawned", s.wave === "fighting" && s.waves === 2); }
+{ const s = new SoulSim({ perSide: 4, variance: 0, playerDamage: 40, oppReact: 0.3, seed: 5 }); for (const t of s.living("enemy")) s.kill(t, "trooper"); const ally = s.living("ally").map((t) => t.id);
+  s.step(0.05); for (let i = 0; i < 200; i++) s.step(0.01);
+  ok("clearing the enemy side keeps ally survivors into the next wave (#35)", s.waves === 2 && ally.every((id) => s.troopers.some((t) => t.id === id && t.alive)) && s.living("enemy").length === 4, `allies ${s.living("ally").length}`); }
+{ const s = new SoulSim({ perSide: 1, variance: 0, playerDamage: 40, oppReact: 0, seed: 1 });
+  while (!s.orbs.length) s.step(0.001); const born = s.orbs[0].born; while (s.orbs.some((o) => o.owner === "ally" && o.state !== "claimed")) s.step(0.001);
+  const d = s.events.find((e) => e.type === "oppDeny"); ok("opponent cannot deny before light-up + 80 ms grace", !!d && d.t - born >= ORB.lightUp + ORB.grace - 1e-6, `at ${((d!.t - born) * 1000).toFixed(0)} ms`); }
+{ const s = new SoulSim({ perSide: 1, variance: 0, playerDamage: 40, oppReact: 9, seed: 1 });
+  while (!s.orbs.length) s.step(0.001); const born = s.orbs[0].born; while (s.orbs.some((o) => o.state !== "claimed")) s.step(0.001);
+  const p = s.events.find((e) => e.type === "popOwner"); ok("unclaimed orb pops at 1.0 s to owner (not counted lost)", !!p && near(p.t - born, ORB.pop, 0.002), `${((p!.t - born) * 1000).toFixed(0)} ms`); }
+{ const s = new SoulSim({ perSide: 1, variance: 0, playerDamage: 40, oppReact: 9, seed: 1 }); const e = s.troopers[1];
+  while (e.windowAt === undefined) s.step(0.001); const r = s.shootTrooper(e); ok("last hit at window open: error ~0 ms", r.res === "lasthit" && Math.abs(r.errMs) <= 1.01, `err=${r.errMs.toFixed(2)} ms`);
+  const o = s.orbs[0]; s.step(0.1); ok("orb shot while dark = early", s.shootOrb(o).res === "early"); s.step(0.0501); const r2 = s.shootOrb(o); ok("orb shot at light-up = secure, err ~0", r2.res === "secure" && Math.abs(r2.errMs) < 1, `err=${r2.errMs.toFixed(2)} ms`);
+  ok("claimed orb cannot be claimed twice", s.shootOrb(o).res === "late"); }
+{ const m = new Mover(["dash"]); m.set("dash"); let peak = 0, t = 0, dist = 0; const dt = 1 / 1000; while (m.mode === "dash") { m.step(dt); peak = Math.max(peak, Math.abs(m.vx)); dist += Math.abs(m.vx) * dt; t += dt; }
+  ok("dash peak = 635 u/s = 16.13 m/s", near(peak, 635 * 0.0254, 0.05), `peak=${peak.toFixed(2)}`); ok("dash duration 0.62 s", near(t, 0.62, 0.002), `t=${t.toFixed(3)} dist=${dist.toFixed(2)} m (EST)`); }
+{ const m = new Mover(["air"]); m.set("air"); let top = 0; while (m.mode === "air") { m.step(1 / 1000); top = Math.max(top, m.y); } ok("jump apex = 45 u = 1.143 m", near(top, 45 * 0.0254, 0.01), `apex=${top.toFixed(3)}`); }
+{ const m = new Mover(["zip"]); m.x = -8; m.set("zip"); m.dir = 1; m.step(0.1); ok("zipline 18 m/s", near(Math.abs(m.vx), 18), `v=${m.vx}`);
+  for (let i = 0; i < 2000 && m.mode !== "walk"; i++) m.step(0.005); ok("zip ends by dropping (air) then landing, no teleport", m.log.map((l) => l.mode).join(">") === "zip>air>walk", m.log.map((l) => l.mode).join(">"));
+  const m2 = new Mover(["walk"]); m2.set("slide"); ok("illegal transition walk>slide rejected", m2.illegal === 1 && m2.mode === "walk"); }
+{ const m = new Mover(["walk", "dash", "slide"], 2); m.lim = 40; m.dir = 1; m.set("dash"); while (m.tMode < m.dashDur - 0.01) m.step(1 / 240); let n = 0; m.set("slide"); while (m.mode === "slide" && n < 2400) { m.step(1 / 240); n++; }
+  ok("slide after a dash lasts a visible time (0.4 to 1.2 s)", n / 240 > 0.4 && n / 240 < 1.2, `${(n / 240).toFixed(2)} s`); }
+{ const m = new Mover(["walk", "dash", "slide", "air", "zip"], 11); for (let i = 0; i < 60000; i++) m.step(1 / 144); ok("60k random steps: no illegal transitions, stays in bounds", m.illegal === 0 && Math.abs(m.x) <= 9 && m.y >= 0, `changes=${m.log.length}`); }
+ok("gravity derived 24.56 m/s^2", near(MOVE.gravity, 24.564, 0.01), MOVE.gravity.toFixed(3));
+// sensitivity math
+ok("deadlock sens 1 @ 800 dpi = 25.98 cm/360", near(deadlockSensToCm360(1, 800), 25.977, 0.01), deadlockSensToCm360(1, 800).toFixed(3));
+ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToCm360(0.73, 1600), 1600), 0.73, 1e-9));
+{ const k = radPerCountFromCm360(35, 800); const counts = (35 / 2.54) * 800; ok("35 cm of counts at 800 dpi = exactly 2*pi", near(counts * k, 2 * Math.PI, 1e-9)); }
+// crosshair parsing and precedence
+{ const mem: any = { [CROSSHAIR_KEY]: JSON.stringify({ ...DEFAULT_CROSSHAIR, r: 255, gap: 2 }) }; const ls = { getItem: (k: string) => mem[k] ?? null };
+  ok("defaults when nothing set", loadCrosshair("", { getItem: () => null }).source === "default" && loadCrosshair("", { getItem: () => null }).cfg.g === 245);
+  ok("localStorage used when no ?ch", loadCrosshair("", ls).source === "localStorage" && loadCrosshair("", ls).cfg.r === 255);
+  const u = loadCrosshair("?ch=10,20,30,-1,3,8,0.5,1,0.2,1,0", ls); ok("?ch wins over localStorage, 11 values in order, booleans 0/1", u.source === "url" && u.cfg.r === 10 && u.cfg.gap === -1 && u.cfg.height === 8 && u.cfg.pipBorder === true && u.cfg.staticGap === false);
+  ok("bad ?ch (wrong count) falls back", loadCrosshair("?ch=1,2,3", ls).source === "localStorage"); ok("share roundtrip", toShare(parseShare(toShare(DEFAULT_CROSSHAIR))!) === "0,245,255,-3,4,10,1,0,0,0,1", toShare(DEFAULT_CROSSHAIR)); }
+  ok("pip offset matches site: max(0, h/2+gap); defaults -> 2 px", pipOffset(DEFAULT_CROSSHAIR) === 2 && pipOffset({ ...DEFAULT_CROSSHAIR, gap: -20 }) === 0, String(pipOffset(DEFAULT_CROSSHAIR)));
+// session phases
+{ const s = new Session(2); ok("cannot run from idle", !s.go("running")); s.go("countdown"); let tot = 0; for (let i = 0; i < 1000 && s.phase !== "results"; i++) tot += s.step(0.01); ok("countdown 3 s then exactly 2 s of sim time", near(tot, 2, 1e-9) && s.phase === "results", `sim=${tot.toFixed(3)}`); }
+// storage
+{ const mem: any = {}; const st = new LocalStore({ getItem: (k) => mem[k] ?? null, setItem: (k, v) => { mem[k] = v; } });
+  await st.addResult({ drill: "x", at: "2026-01-01T00:00:00Z", difficulty: 1, score: 5, metrics: {} }); const ex = await st.exportAll();
+  const mem2: any = {}; const st2 = new LocalStore({ getItem: (k) => mem2[k] ?? null, setItem: (k, v) => { mem2[k] = v; } }); const n = await st2.importAll(JSON.parse(JSON.stringify(ex))); const n2 = await st2.importAll(ex);
+  ok("export/import roundtrip, dedupe on reimport", n === 1 && n2 === 0 && (await st2.results("x"))[0].score === 5);
+  let threw = false; try { await st2.importAll({ foo: 1 }); } catch { threw = true; } ok("import rejects foreign JSON", threw); }
+})();
+// ---- feedback cues and sfx (v4)
+{ const sr = 48000; for (const [k, f] of Object.entries(SFX)) { const s = f(sr); let peak = 0, nan = false; for (const v of s) { if (!Number.isFinite(v)) nan = true; peak = Math.max(peak, Math.abs(v)); }
+    ok(`sfx ${k}: finite, 0.05..1.6 s, peak 0.05..1.5`, !nan && s.length >= 0.05 * sr && s.length <= 1.6 * sr && peak > 0.05 && peak < 1.5, `len=${(s.length / sr).toFixed(2)}s peak=${peak.toFixed(2)}`); }
+  for (const e of ["hit", "lasthit", "secure", "deny", "miss", "countdown"]) ok(`sfx event mapped: ${e}`, typeof SFX[e] === "function");
+  const learn = norm2({}); ok("default preset learn, all cues on", learn.cuePreset === "learn" && CK.every((k) => learn.cues[k]));
+  const pro = norm2({ cuePreset: "pro", cues: { hitMarkers: true } }); ok("pro preset forces cues off", CK.every((k) => !pro.cues[k]));
+  const cu = norm2({ cuePreset: "custom", cues: { hitMarkers: false } }); ok("custom keeps per-cue toggles", !cu.cues.hitMarkers && cu.cues.orbCues);
+  ok("volume clamped, mute bool", norm2({ volume: 7, muted: 1 }).volume === 1 && norm2({ muted: 1 }).muted === true); }
+{ const s = new SoulSim({ perSide: 1, variance: 0, playerDamage: SOUL_DMG, oppReact: 9, seed: 1 }); const e = s.troopers[1]; const hp0 = e.hp;
+  const r = s.shootTrooper(e); const fb = trooperFeedback(r.res);
+  ok("body hit on full-HP trooper: result hit, hp -40", r.res === "hit" && near(hp0 - e.hp, 40), `res=${r.res} dhp=${hp0 - e.hp}`);
+  ok("body hit feedback: hit sound, damage number 40, small marker", fb.sound === "hit" && fb.number?.text === "40" && fb.marker === "hit" && typeof SFX[fb.sound] === "function");
+  const lh = trooperFeedback("lasthit"); ok("last hit feedback: lasthit sound, kill marker", lh.sound === "lasthit" && lh.marker === "kill" && lh.number?.text === "LAST HIT"); }
+{ const L = (t0: number): Item => ({ kind: "label", t0, dur: 0.9, color: "#fff", text: "x" }); const its = [L(0), L(0.1), L(0.2), L(0.3)]; const m = labelLayout(its);
+  const ys = [...m.values()]; ok("center labels never share a lane", new Set(ys).size === ys.length && ys.every((a) => ys.every((b) => a === b || Math.abs(a - b) >= LANE_PX)), ys.join(","));
+  ok(`label lanes capped at ${LABEL_LANES}, oldest dropped, newest nearest center`, m.size === LABEL_LANES && !m.has(its[0]) && m.get(its[3]) === 60); }
+{ const q = PROFILES.realistic.reversalQ!; ok("realistic reversal sampler hits study median 0.833 s", near(sampleQ(q, 0.5), 0.833, 1e-9) && sampleQ(q, 0) === 0.15 && sampleQ(q, 1) === 2.5);
+  const m = new Mover(["walk", "dash", "slide", "air", "zip"], 11, PROFILES.realistic); let flips = 0, lastDir = m.dir; const dt = 1 / 240;
+  for (let i = 0; i < 240 * 600; i++) { m.step(dt); if (m.dir !== lastDir) { flips++; lastDir = m.dir; } }
+  const perMin = flips / 10; ok("realistic profile reversal rate consistent with study intervals (median 0.83 s, EST): 25..90 per min", perMin > 25 && perMin < 90, `${perMin.toFixed(1)}/min`);
+  ok("realistic profile only uses legal transitions", m.illegal === 0);
+  ok("settings default classic, accepts realistic", norm2({}).moveProfile === "classic" && norm2({ moveProfile: "realistic" }).moveProfile === "realistic" && norm2({ moveProfile: "x" }).moveProfile === "classic"); }
+(async () => { await p1;
+{ const parse = (n: string) => new Promise<any>((res, rej) => { const b = readFileSync(`assets/models/${n}_${MODEL_VERSION[n] ?? "v1"}.glb`); new GLTFLoader().parse(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength), "", res, rej); });
+  let okN = 0; for (const n of MODEL_NAMES) { try { await parse(n); okN++; } catch (e) { console.log("parse fail", n, String(e).slice(0, 80)); } } ok(`asset pack: all ${MODEL_NAMES.length} GLBs parse with GLTFLoader`, okN === MODEL_NAMES.length, `${okN}`);
+  const d = await parse("target_dummy"); const names = d.animations.map((c: any) => c.name).sort().join(","); let bones = 0; d.scene.traverse((o: any) => { if (o.isBone) bones++; });
+  ok("dummy: 12 bones, clips idle/run/dash/slide/jump", bones === 12 && names === "dash,idle,jump,run,slide", `${bones} bones, ${names}`);
+  const dash = d.animations.find((c: any) => c.name === "dash"); const tr = dash.tracks.find((t: any) => t.name === "root.position"); let maxZ = -1e9; for (let i = 2; i < tr.values.length; i += 3) maxZ = Math.max(maxZ, tr.values[i]);
+  ok("dummy v3 dash is one-way along +Z, ending at 1.2 m with no dip", Math.abs(maxZ - 1.2) < 0.05 && Math.abs(tr.values[tr.values.length - 1] - 1.2) < 0.01 && [...tr.values].every((x: number, i: number) => i % 3 !== 1 || x === 0), `end z ${tr.values[tr.values.length - 1].toFixed(3)}`);
+  ok("dummy v3: every clip starts at 0", d.animations.every((c: any) => c.tracks.every((t: any) => t.times[0] === 0)));
+  const st = stripRootMotion(d.animations); const rp = (n: string) => st.find((c) => c.name === n)!.tracks.find((t) => t.name === "root.position")!.values;
+  ok("root travel stripped: no X/Z in any clip, no Y in jump, slide crouch Y kept", st.every((c) => { const v = c.tracks.find((t) => t.name === "root.position")?.values ?? []; for (let i = 0; i < v.length; i += 3) if (v[i] || v[i + 2]) return false; return true; }) && [...rp("jump")].every((x) => x === 0) && Math.min(...rp("slide")) < -0.1);
+  ok("loops trimmed by the duplicate last key, one-shots keep full length", Math.abs(st.find((c) => c.name === "run")!.duration - (0.833 - 1 / 24)) < 0.002 && Math.abs(st.find((c) => c.name === "idle")!.duration - (2.458 - 1 / 24)) < 0.002 && Math.abs(st.find((c) => c.name === "dash")!.duration - 0.708) < 0.002, `run ${st.find((c) => c.name === "run")!.duration.toFixed(3)} s`);
+  { const sc = d.scene, mx = new THREE.AnimationMixer(sc), ms: any[] = []; sc.traverse((o: any) => o.isSkinnedMesh && ms.push(o)); mx.clipAction(st.find((c) => c.name === "slide")!).play(); mx.setTime(0.6); sc.updateMatrixWorld(true);
+    let lo = 1e9; const v = new THREE.Vector3(); for (const m of ms) { const pa = m.geometry.attributes.position; for (let i = 0; i < pa.count; i++) { m.getVertexPosition(i, v); v.applyMatrix4(m.matrixWorld); lo = Math.min(lo, v.y); } }
+    console.log(`  info: mid-slide lowest vertex y = ${lo.toFixed(3)} m (ground 0)`); ok("slide pose measured against ground (report only)", Number.isFinite(lo), `${lo.toFixed(3)} m`); }
+  ok("mover state to clip mapping", clipFor("dash", 9) === "dash" && clipFor("slide", 3) === "slide" && clipFor("air", 0) === "jump" && clipFor("walk", 6) === "run" && clipFor("walk", 0) === "idle" && clipFor("zip", 18) === "idle");
+  ok("dummy faces its travel direction (clip +Z to world +/-X)", facingFor(5, 0) === Math.PI / 2 && facingFor(-5, 0) === -Math.PI / 2 && facingFor(0, 1) === 1); }
+{ const lane = { a: [-9, 0, -15] as [number, number, number], b: [9, 0, -15] as [number, number, number] }; const p = pathPoint(lane, 3, 0.5);
+  ok("level system: lane path maps mover x straight onto world x", p.x === 3 && p.y === 0.5 && p.z === -15 && pathLen(lane) === 18);
+  const ramp = { a: [0, 0, -10] as [number, number, number], b: [0, 4, -18] as [number, number, number] }; ok("level system: ramp paths carry height", Math.abs(pathPoint(ramp, 0, 0).y - 2) < 1e-9);
+  ok("level system: dummy yaw follows path and travel sign", Math.abs(pathYaw(lane, 1) - Math.PI / 2) < 1e-9 && Math.abs(pathYaw(lane, -1) + Math.PI / 2) < 1e-9);
+  ok("level system: zipline only on paths with a cable", pathModes(lane, ["walk", "zip"]).join() === "walk" && pathModes({ ...lane, zip: true }, ["walk", "zip"]).join() === "walk,zip");
+  const a = aimAngles(new THREE.Vector3(0, 9.7, 0), new THREE.Vector3(0, 1.7, -8)); ok("level system: aim angles look down at a target below", Math.abs(a.yaw) < 1e-9 && Math.abs(a.pitch + Math.PI / 4) < 1e-9);
+  for (const id of LEVEL_ORDER) { const L = LEVEL_DEFS[id]; ok(`level ${id}: has paths, vantage above ground, paths at least 8 m`, L.paths.length > 0 && L.vantage[1] >= 1.7 && L.paths.every((q) => pathLen(q) >= 8)); } }
+{ ok("hero weapons: all 44 heroes, unique ids, every entry links deadlock.wiki", HERO_WEAPONS.length === 44 && new Set(HERO_WEAPONS.map((h) => h.id)).size === 44 && HERO_WEAPONS.every((h) => h.src.startsWith("https://deadlock.wiki/") && h.bps > 0 && h.ammo > 0 && h.reloadS > 0), `${HERO_WEAPONS.length}`);
+  const g = new Weapon(heroWeapon("lady-geist")!); let n = 0; for (let i = 0; i < 20; i++) if (g.tryFire()) n++; ok("clicks faster than the cadence are dropped", n === 1 && g.blocked === 19);
+  const w = new Weapon(heroWeapon("haze")!); let t = 0, firing = 0; while (t < 10) { if (w.hold(1 / 120)) firing += 1 / 120; t += 1 / 120; }
+  const cyc = 25 / 9.524 + 2.35; ok("held fire: Haze empties 25 at 9.524/s then reloads 2.35 s", Math.abs(firing / 10 - (25 / 9.524) / cyc) < 0.05, `firing ${(100 * firing / 10).toFixed(0)}%`);
+  const a = new Weapon(heroWeapon("abrams")!); a.ammo = 0; a.reload(); ok("Abrams single-shell reload: 0.705 + 9 x 0.3525 = 3.88 s from empty", Math.abs(a.reloadLeft - (0.705 + 9 * 0.3525)) < 1e-9);
+  ok("settings: hero weapon off by default, unknown ids fall back to off", norm2({}).heroWeapon === "off" && norm2({ heroWeapon: "haze" }).heroWeapon === "haze" && norm2({ heroWeapon: "x" }).heroWeapon === "off"); }
+{ const pk = new Peek(); const dt = 1 / 120; pk.step(dt, true); const sOut = pk.state; let t = dt; while (pk.state !== "peeked" && t < 1) { pk.step(dt, true); t += dt; }
+  ok("cover fire peek: cover -> out -> peeked in PEEK_S, only peeked can shoot", sOut === "out" && Math.abs(t - PEEK_S) < 2 * dt && pk.canShoot, `${t.toFixed(3)} s`);
+  pk.step(dt, false); const sb = pk.state, sh = pk.canShoot; for (let i = 0; i < 60; i++) pk.step(dt, false); ok("cover fire peek: release -> back -> cover, no illegal transitions", sb === "back" && !sh && pk.state === "cover" && pk.illegal === 0);
+  ok("cover fire layout: last cover row is inside lose distance on every difficulty, first row far outside", DIFFS.every((d) => Math.hypot(2, ROWS[ROWS.length - 1]) <= d.loseDist && ROWS[0] > d.loseDist * 4));
+  const idle = new CoverSim(DIFFS[1], 11); let n = 0; while (idle.round === "running" && n++ < 120 * 120) idle.step(dt);
+  ok("cover fire: nobody shooting means an enemy reaches you and the round is lost", idle.round === "lost" && idle.enemies.some((e) => e.state === "reached") && idle.closest <= DIFFS[1].loseDist, `lost at ${idle.t.toFixed(1)} s`);
+  const h = new CoverSim(DIFFS[1], 12); const e0 = h.enemies[0]; ok("cover fire: hidden or spawning enemies take no damage", h.damage(e0.id, 99) === "blocked" && e0.hp === e0.max);
+  const g = new CoverSim(DIFFS[2], 13); let vmax = 0, kills0 = 0; for (let i = 0; i < 120 * 90 && g.round === "running"; i++) { g.step(dt); for (const e of g.exposed()) { vmax = Math.max(vmax, Math.hypot(e.vx, e.vz)); if (e.legT > 0.25) g.damage(e.id, dt); } }
+  kills0 = g.kills; ok("cover fire: a good tracker (on every exposed enemy after 0.25 s) holds 90 s on Hard with kills", g.round === "running" && kills0 > 10, `kills ${kills0}, closest ${g.closest.toFixed(1)} m`);
+  ok("cover fire: enemies dash at spec peak speed (579 u/s) and never exceed it", vmax > MOVE.dash.b2.peak * 0.9 && vmax <= MOVE.dash.b2.peak + 1e-6, `${vmax.toFixed(2)} m/s`);
+  ok("cover fire: enemy state machine has no illegal transitions", [idle, h, g].every((s) => s.enemies.every((e) => e.illegal === 0))); }
+{ const box = { u0: -9, u1: 9, v0: -2.5, v1: 2.5 }; const all = ["walk", "dash", "slide", "air", "zip"] as any; const counts: number[] = []; let inBox = true, quad = new Set<string>(), illegal = 0, vmax = 0, top = 0;
+  for (let lv = 0; lv < 4; lv++) { const m = new FreeMover(all, box, FREE_RATES[lv], 21 + lv); for (let i = 0; i < 144 * 120; i++) { m.step(1 / 144);
+      if (m.u < box.u0 - 1e-9 || m.u > box.u1 + 1e-9 || m.v < box.v0 - 1e-9 || m.v > box.v1 + 1e-9 || m.y < 0) inBox = false; if (m.speed > 1) quad.add(`${Math.sign(m.vu)},${Math.sign(m.vv)}`);
+      if (m.mode === "dash") vmax = Math.max(vmax, m.speed); if (m.mode === "air" && m.log.length > 1 && ["walk", "slide"].includes(m.log[m.log.length - 2].mode)) top = Math.max(top, m.y); }
+    counts.push(m.turns + m.dashes + m.jumps); illegal += m.illegal; }
+  ok("free movement: 2 min per difficulty stays inside the box, no illegal transitions", inBox && illegal === 0);
+  ok("free movement: moves in all four quadrants (left/right and toward/away)", quad.size >= 8, [...quad].join(" "));
+  ok("free movement: turns, dashes and jumps get more frequent with difficulty", counts.every((c, i) => i === 0 || c > counts[i - 1]), counts.join(" < "));
+  ok("free movement: dash peak is the spec peak, jump apex about 1.14 m (zip drops and air dashes excluded)", vmax <= MOVE.dash.b2.peak + 1e-6 && vmax > MOVE.dash.b2.peak * 0.95 && top > 1.0 && top < 1.3, `dash ${vmax.toFixed(2)} m/s, apex ${top.toFixed(2)} m`);
+  const g = new CoverSim(DIFFS[3], 31, 3); let lat = 0, back = 0, jumps = 0; for (let i = 0; i < 120 * 60 && g.round === "running"; i++) { g.step(1 / 120);
+    for (const e of g.exposed()) { if (!e.dashing && Math.abs(e.vx * (e.toZ - e.z) - e.vz * (e.toX - e.x)) / (Math.hypot(e.toX - e.x, e.toZ - e.z) || 1) > 2) lat++; if (!e.dashing && e.back > 0) back++; } }
+  jumps = g.enemies.reduce((a, e) => a + e.jumps, 0) + g.kills;
+  ok("cover fire free movement: enemies strafe sideways, step back and jump between covers, inside the arena", lat > 50 && back > 10 && g.enemies.every((e) => Math.abs(e.x) <= 10), `strafe frames ${lat}, back frames ${back}`); }
+
+// ---- #52 collision, #53 zipline knock-off, #54 lane layouts, #56 thin-line wiggle ----
+{ const L = LEVEL_DEFS["multi-path"], S = levelSolids(L), ramp = L.paths[2];
+  ok("#52 the across path walker can no longer stand inside the ramp (the clip in the issue)", blocked(S, -8.2, 0, -13));
+  let onRamp = 0; for (let u = -7; u <= 7; u += 0.5) if (!blocked(S, freePoint(ramp, u, 0, 0).x, freePoint(ramp, u, 0, 0).y, freePoint(ramp, u, 0, 0).z)) onRamp++;
+  ok("#52 the ramp walker stands on the ramp surface (not blocked by it)", onRamp === 29, `${onRamp}/29`);
+  const br = levelSolids(LEVEL_DEFS["bridge"]); ok("#52 bridge: on the deck is clear, inside a pillar or the deck slab is blocked", !blocked(br, 0, 5, 0) && blocked(br, 7, 0, 0) && blocked(br, 0, 4.5, 0));
+  let inside = 0, frames = 0, moved = 0; const where = new Set<string>();
+  for (const id of LEVEL_ORDER) { const LL = LEVEL_DEFS[id], SS = levelSolids(LL);
+    for (const p of LL.paths) { const lim = pathLen(p) / 2, lat = p.lat ?? 2.5; const m = new FreeMover(["walk", "dash", "slide", "air", "zip"], { u0: -lim, u1: lim, v0: -lat, v1: lat }, FREE_RATES[3], 77); m.cables = pathCables(p, LL.zips ?? []);
+      const inS = () => { if (m.mode === "zip") return false; const q = freePoint(p, m.u, m.v, m.y); return blocked(SS, q.x, q.y, q.z); };
+      for (let k = 0; k < 40 && inS(); k++) { m.u = (k / 40 - 0.5) * 2 * lim; m.v = ((k * 7) % 11 / 11 - 0.5) * 2 * lat; }
+      const u0 = m.u; for (let i = 0; i < 60 * 60; i++) { const pu = m.u, pv = m.v; m.step(1 / 60); if (inS()) { m.u = pu; m.v = pv; m.vu = m.vv = 0; m.heading(); if (m.mode === "dash" || m.mode === "slide") m.set("walk"); unstick(m, inS); } frames++; if (inS()) { inside++; where.add(id); } if (Math.abs(m.u - u0) > 2) moved++; } } }
+  ok("#52 every level: 1 min of Pro free movement per path never ends a frame inside a solid, and targets still move", inside === 0 && moved > frames * 0.3, `inside ${inside}/${frames} ${[...where]}, moved ${moved}`); }
+{ const LL = LEVEL_DEFS["lane-plaza"], p = LL.paths[0], c = pathCables(p, LL.zips!); const m = new FreeMover(["walk", "zip"], { u0: -9, u1: 9, v0: -4.5, v1: 4.5 }, { turn: 0.5, dash: 0, jump: 0, zip: 3 }, 3); m.cables = c;
+  let rode = 0, xs: number[] = [], knocked = false, fellTo = -1, walked = false;
+  for (let i = 0; i < 60 * 30 && !walked; i++) { m.step(1 / 60); if (m.mode === "zip") { rode++; const q = freePoint(p, m.u, m.v, m.y); xs.push(q.x, q.y); if (rode === 10) { knocked = m.knock(); } }
+    if (knocked && m.mode === "air") fellTo = m.y; if (knocked && m.mode === "walk") walked = true; }
+  ok("#53 zipline runs along the lane: a rider hangs under the cable (x -2.5, feet 3.5 m)", xs.length > 0 && xs.every((v, i) => i % 2 ? Math.abs(v - 3.5) < 1e-6 : Math.abs(v + 2.5) < 1e-6), `${xs.slice(0, 2)}`);
+  ok("#53 a hit on the cable knocks the rider off: falls with no jump boost, lands, walks again", knocked && walked && m.knocks === 1 && m.illegal === 0 && fellTo < 3.5 && m.log.some((e, i) => e.mode === "air" && m.log[i - 1]?.mode === "zip"), `knocked ${knocked} walked ${walked} knocks ${m.knocks} illegal ${m.illegal} fell ${fellTo.toFixed(2)} rode ${rode}`);
+  const far = new FreeMover(["walk", "zip"], { u0: -9, u1: 9, v0: -4.5, v1: 4.5 }, { turn: 0, dash: 0, jump: 0, zip: 50 }, 3); far.cables = c; far.v = 4.5; far.hu = 0; far.hv = 0; for (let i = 0; i < 30; i++) far.step(1 / 60);
+  ok("#53 a walker far from the cable cannot mount it", far.log.every((e) => e.mode !== "zip")); }
+{ const lanes = LEVEL_ORDER.filter((id) => LEVEL_DEFS[id].souls); ok("#54 at least three lane layouts with a souls vantage and ziplines along the lane", lanes.length >= 3 && lanes.every((id) => (LEVEL_DEFS[id].zips ?? []).length > 0 && LEVEL_DEFS[id].zips!.every((z) => z.a[0] === z.b[0])), lanes.join());
+  let bad: string[] = []; for (const id of lanes) { const L = LEVEL_DEFS[id], S = levelSolids(L), e = new THREE.Vector3(...L.souls!.vantage);
+    for (let z = 13; z <= 19; z += 1) for (let x = -3.6; x <= 4.6; x += 0.9) { if (blocked(S, x, 0, -z, 0.1)) bad.push(`${id} trooper ${x},${z}`);
+      const t = new THREE.Vector3(x, 1.4, -z); for (let k = 0.05; k < 0.97; k += 0.03) { const q = e.clone().lerp(t, k); for (const s of S) { const dx = q.x - s.cx, dz = q.z - s.cz, c = Math.cos(s.ry), sn = Math.sin(s.ry);
+        if (Math.abs(dx * c - dz * sn) < s.hw && Math.abs(dx * sn + dz * c) < s.hd && q.y < s.top(q.x, q.z) && q.y > s.bot) { bad.push(`${id} LOS ${x},${z}`); k = 2; break; } } } } }
+  ok("#54 souls lanes: trooper lane is clear and the souls vantage sees every trooper slot", bad.length === 0, bad.slice(0, 4).join("; "));
+  ok("#54 every layout path spawns clear of solids at its middle", lanes.every((id) => LEVEL_DEFS[id].paths.every((p) => { const q = freePoint(p, 0, 0, 0); return !blocked(levelSolids(LEVEL_DEFS[id]), q.x, q.y, q.z); }))); }
+{ const b = readFileSync("assets/models/wall_straight_v1.glb"); const g: any = await new Promise((res, rej) => new GLTFLoader().parse(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength), "", res, rej)); fixStrips(g.scene);
+  let hgt = 0, off = false; g.scene.traverse((o: any) => { if (o.isMesh && /_E$/.test(o.material.name)) { o.geometry.computeBoundingBox(); hgt = o.geometry.boundingBox.max.y - o.geometry.boundingBox.min.y; off = o.material.polygonOffset && o.material.polygonOffsetFactor < 0; } });
+  ok("#56 glow strips are pulled forward in depth and 1.6x taller (8 cm to 12.8 cm)", off && Math.abs(hgt - 0.128) < 1e-3, `${hgt.toFixed(3)} m`); }
+
+// ---- #57 sounds, #58 harder targets and air dashes, #59 streak forgiveness ----
+{ const names = ["streak1", "streak2", "streak3", "streak4", "streak5", "combo2", "combo3", "combo4", "knock", "peek", "best", "done"]; let bad: string[] = [];
+  for (const n of names) { const f = SFX[n]; if (!f) { bad.push(n + " missing"); continue; } const x = f(48000); let pk = 0, fin = true; for (const v of x) { if (!Number.isFinite(v)) fin = false; pk = Math.max(pk, Math.abs(v)); } if (!fin || pk > 1 || pk < 0.02 || x.length < 2400) bad.push(`${n} peak ${pk.toFixed(2)}`); }
+  ok("#57 reward sounds exist, are finite, audible and do not clip", bad.length === 0, bad.join(", "));
+  const tiers = [1, 2, 3, 4, 5].map((n) => SFX[`streak${n}`](48000).length); ok("#57 higher streak tiers play longer arpeggios", tiers.every((l, i) => i === 0 || l > tiers[i - 1]));
+  const hp = [0, 0.1, 0.3, 0.5, 0.7, 0.9, 1].map(humParams); ok("#57 streak hum: silent at 0, then pitch and loudness only rise, every pitch a pentatonic note, soft (gain at most 0.11)",
+    hp[0].gain === 0 && hp.every((p, i) => i === 0 || (p.freq >= hp[i - 1].freq && p.gain > hp[i - 1].gain)) && hp.every((p) => HUM_STEPS.includes(p.freq) && p.gain <= 0.11 + 1e-9) && hp[6].freq > hp[1].freq); }
+{ const box = { u0: -9, u1: 9, v0: -2.5, v1: 2.5 }, all = ["walk", "dash", "slide", "air"] as any; const res: any[] = [];
+  for (let lv = 0; lv < 4; lv++) { const m = new FreeMover(all, box, FREE_RATES[lv], 40 + lv); let minSt = 9, multi = 0, up = 0, perJump = 0, prevY = 0;
+    for (let i = 0; i < 144 * 180; i++) { const ad0 = m.airDashes; m.step(1 / 144); minSt = Math.min(minSt, m.stamina); if (m.mode === "dash" && m.airDash && m.y > prevY + 1e-6) up++; prevY = m.y;
+      if (m.airDashes > ad0) { perJump++; if (perJump === 2) multi++; } if (m.mode === "walk") perJump = 0; }
+    res.push({ air: m.airDashes, multi, up, minSt, illegal: m.illegal }); }
+  ok("#58 air dashes: none on Easy, more with difficulty, some go upward, some jumps chain 2+ air dashes on Hard/Pro", res[0].air === 0 && res[1].air < res[2].air && res[2].air < res[3].air && res[3].up > 0 && res[2].multi + res[3].multi > 0, JSON.stringify(res.map((r) => [r.air, r.multi, r.up])));
+  ok("#58 stamina never goes below zero (3 bars, 4.5 s regen) and no illegal transitions", res.every((r) => r.minSt >= -1e-9 && r.illegal === 0) && STAMINA.bars === 3);
+  const ev: number[] = [], turn: number[] = []; for (let lv = 0; lv < 4; lv++) { const m = new FreeMover(all, box, FREE_RATES[lv], 9); let tr = 0, turned = 0, n = 0;
+    for (let i = 0; i < 144 * 60; i++) { const du = m.vu, dv = m.vv; m.step(1 / 144); if ((tr += 1 / 144) >= EVADE_AFTER[lv]) { tr = 0; const sp = Math.hypot(du, dv); if (m.evade() && sp > 1) { const a = Math.acos(Math.max(-1, Math.min(1, (du * m.hu + dv * m.hv) / sp))); n++; if (a > Math.PI / 3) turned++; } } }
+    ev.push(m.evades); turn.push(n ? turned / n : 1); }
+  ok("#58 a tracked target breaks away sooner the harder the mode (evades per minute of tracking rise), each break turns at least 60 degrees", ev.every((e, i) => i === 0 || e > ev[i - 1]) && turn.every((t) => t > 0.99), `${ev.join(" < ")} turned ${turn.map((t) => t.toFixed(2))}`); }
+{ const dt = 1 / 144, run = (k: StreakKeeper, s: number, on: boolean, cov: boolean) => { for (let t = 0; t < s - 1e-9; t += dt) k.update(dt, on, cov); };
+  let k = new StreakKeeper(); run(k, 2, true, false); k.switched(); run(k, 0.4, false, false); const held = k.streak; run(k, 0.3, true, false);
+  ok("#59 target switch: streak holds through a 0.4 s move to the new target, without growing while held", Math.abs(held - 2) < 0.02 && k.streak > 2.25, `${held.toFixed(2)} -> ${k.streak.toFixed(2)}`);
+  k = new StreakKeeper(); run(k, 2, true, false); k.switched(); run(k, GRACE_SWITCH_S + 0.05, false, false); ok("#59 switch grace is 0.5 s: later than that the streak resets", k.streak === 0);
+  k = new StreakKeeper(); run(k, 2, true, false); run(k, 3, false, true); const c1 = k.streak; run(k, 0.3, false, false); const c2 = k.streak; run(k, 0.3, false, false);
+  ok("#59 cover: the streak holds while the target is behind cover (3 s), then 0.5 s to get back on it", Math.abs(c1 - 2) < 0.02 && Math.abs(c2 - 2) < 0.02 && k.streak === 0 && k.holds.cover > 2.9);
+  k = new StreakKeeper(); run(k, 2, true, false); k.update(dt, false, false); ok("#59 no forgiveness for simply missing: off target with no switch or cover resets at once", k.streak === 0); }
+console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);
+})();

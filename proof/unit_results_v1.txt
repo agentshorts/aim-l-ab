@@ -1,0 +1,16 @@
+PASS trooper HP drop per tick = 35 dps * 0.5 s hp=282.5
+PASS after 9 ticks hp=142.5
+PASS ranged 300 hp dies at 9.0 s (18 ticks) t=9.000
+PASS orb spawns on death, floating share 50 of 100 
+PASS opponent cannot deny before light-up + 80 ms grace at 230 ms
+PASS unclaimed orb pops at ~1.0 s 1001 ms
+PASS last hit on window open: error ~0 ms, kill err=0.00 ms hp window opens at 7.500 s
+PASS orb shot before light-up = early 
+PASS orb shot at light-up = secure, err ~0 err=0.10 ms
+PASS dash peak = 635 u/s = 16.13 m/s peak=16.10
+PASS dash duration 0.62 s t=0.620
+INFO dash distance (EST model) 5.97 m
+PASS jump apex = 45 u = 1.143 m apex=1.139
+PASS zipline 18 m/s v=18
+PASS gravity derived 24.56 m/s^2 24.560
+ALL PASS

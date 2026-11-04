@@ -1,0 +1,171 @@
+{
+ "souls": {
+  "fxLog": [
+   "label:miss",
+   "marker:",
+   "text:DENIED +2",
+   "flash:",
+   "text:SECURED +2",
+   "text:THEY SECURED -1",
+   "text:THEY DENIED -1"
+  ],
+  "sfx": {
+   "countdown": 3,
+   "go": 1,
+   "miss": 4,
+   "deny": 2,
+   "secure": 2,
+   "lost": 2
+  },
+  "frame": {
+   "n": 819,
+   "mean": 35.26532356532356,
+   "p50": 33.29999999999927,
+   "p99": 116.60000000000218,
+   "max": 166.60000000000218,
+   "sd": 24.442838432932273,
+   "hitches": 228,
+   "hz": 28.356467455846662
+  },
+  "result": {
+   "score": 6,
+   "metrics": {
+    "lastHits": 0,
+    "secures": 2,
+    "denies": 2,
+    "lostOrbs": 2,
+    "autoClaimed": 0,
+    "missedDenies": 0,
+    "earlyOrbShots": 0,
+    "misses": 4,
+    "orbErrMs": 87.1,
+    "lastHitErrMs": 0
+   }
+  },
+  "phase": "results",
+  "lock": "unlocked",
+  "latency": {
+   "n": 2087,
+   "p50": 12.299999999999272,
+   "p95": 68.40000001788212
+  }
+ },
+ "tracking": {
+  "fxLog": [
+   "label:3 s streak",
+   "label:6 s streak",
+   "label:9 s streak",
+   "label:12 s streak",
+   "label:15 s streak",
+   "label:18 s streak"
+  ],
+  "sfx": {
+   "countdown": 12,
+   "go": 2,
+   "miss": 4,
+   "deny": 2,
+   "secure": 2,
+   "lost": 2
+  },
+  "frame": {
+   "n": 767,
+   "mean": 38.503389830508475,
+   "p50": 33.30000000000291,
+   "p99": 133.3000000000029,
+   "max": 250,
+   "sd": 27.61521535109126,
+   "hitches": 244,
+   "hz": 25.97173922613021
+  },
+  "result": {
+   "score": 99.9,
+   "metrics": {
+    "onTargetPct": 99.9,
+    "bestStreakS": 19.98,
+    "seconds": 20,
+    "modeChanges": 26,
+    "illegalTransitions": 0
+   }
+  },
+  "phase": "results",
+  "lock": "unlocked",
+  "latency": {
+   "n": 2643,
+   "p50": -4.099999999998545,
+   "p95": 139.90000001191947
+  }
+ },
+ "models": {
+  "loaded": [
+   "trooper_melee",
+   "trooper_ranged",
+   "soul_orb",
+   "ground_tile",
+   "wall_straight",
+   "wall_corner",
+   "building_guardhouse",
+   "building_tower",
+   "zipline_pylon",
+   "zipline_cable_10m",
+   "target_dummy"
+  ],
+  "failed": []
+ },
+ "dummyModeToClip": [
+  "air>jump",
+  "dash>dash",
+  "slide>slide",
+  "walk>idle",
+  "walk>null",
+  "walk>run"
+ ],
+ "hubHistory": [
+  [
+   "deadlock-souls",
+   6
+  ],
+  [
+   "deadlock-tracking",
+   99.9
+  ]
+ ],
+ "crosshair": {
+  "r": 255,
+  "g": 80,
+  "b": 40,
+  "gap": 2,
+  "width": 3,
+  "height": 12,
+  "pipOpacity": 1,
+  "dotOpacity": 1,
+  "dotOutlineOpacity": 1,
+  "pipBorder": true,
+  "staticGap": true
+ },
+ "fallback": {
+  "failed": 11,
+  "dummy": null,
+  "phase": "countdown",
+  "errors": []
+ },
+ "sfxPlayed": {
+  "souls": {
+   "countdown": 3,
+   "go": 1,
+   "miss": 4,
+   "deny": 2,
+   "secure": 2,
+   "lost": 2
+  },
+  "tracking": {
+   "countdown": 12,
+   "go": 2,
+   "miss": 4,
+   "deny": 2,
+   "secure": 2,
+   "lost": 2
+  }
+ },
+ "done": true,
+ "errors": []
+}

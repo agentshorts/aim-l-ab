@@ -1,0 +1,89 @@
+{
+ "souls": {
+  "frame": {
+   "n": 904,
+   "mean": 29.18396017699115,
+   "p50": 16.700000000000728,
+   "p99": 100,
+   "max": 150.10000000000036,
+   "sd": 18.558314497062057,
+   "hitches": 406,
+   "hz": 34.26539763401978
+  },
+  "result": {
+   "score": 13,
+   "metrics": {
+    "lastHits": 2,
+    "secures": 3,
+    "denies": 3,
+    "lostOrbs": 1,
+    "autoClaimed": 0,
+    "missedDenies": 0,
+    "earlyOrbShots": 0,
+    "misses": 7,
+    "orbErrMs": 44.1,
+    "lastHitErrMs": 65.7
+   }
+  },
+  "phase": "results",
+  "lock": "unlocked",
+  "latency": {
+   "n": 2349,
+   "p50": 10.099999994039536,
+   "p95": 45.700000011920565
+  }
+ },
+ "tracking": {
+  "frame": {
+   "n": 915,
+   "mean": 29.179234972677598,
+   "p50": 16.700000000004366,
+   "p99": 100,
+   "max": 133.40000000000146,
+   "sd": 18.334179179627576,
+   "hitches": 408,
+   "hz": 34.27094647739615
+  },
+  "result": {
+   "score": 99.8,
+   "metrics": {
+    "onTargetPct": 99.8,
+    "bestStreakS": 19.95,
+    "seconds": 20,
+    "modeChanges": 26,
+    "illegalTransitions": 0
+   }
+  },
+  "phase": "results",
+  "lock": "unlocked",
+  "latency": {
+   "n": 3167,
+   "p50": -3.199999988079071,
+   "p95": 28.400000000001455
+  }
+ },
+ "hubHistory": [
+  [
+   "deadlock-souls",
+   13
+  ],
+  [
+   "deadlock-tracking",
+   99.7
+  ]
+ ],
+ "crosshair": {
+  "r": 255,
+  "g": 80,
+  "b": 40,
+  "gap": 2,
+  "width": 3,
+  "height": 12,
+  "pipOpacity": 1,
+  "dotOpacity": 1,
+  "dotOutlineOpacity": 1,
+  "pipBorder": true,
+  "staticGap": true
+ },
+ "errors": []
+}
