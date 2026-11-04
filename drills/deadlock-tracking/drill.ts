@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { Drill, DrillCtx } from "../../core/drill";
 import { makeWorld, makeTrooper, PAL } from "../../core/scene3d";
 import { Mode } from "./mover";
-import { FreeMover, FREE_RATES } from "../../core/freemove";
+import { FreeMover, FREE_RATES, EVADE_AFTER } from "../../core/freemove";
+import { StreakKeeper } from "../../core/streak";
 import { MOVE } from "../../core/spec";
 import { PROFILES } from "./profile";
 import { DummyView } from "./dummy";
@@ -18,8 +19,8 @@ const LANE: LevelDef = { id: "lane", title: "Tracking: movement tech", sub: "", 
 type Target = { path: PathDef; mover: FreeMover; head: THREE.Mesh; hero: ReturnType<typeof makeTrooper>; dummy: DummyView | null; sign: number };
 export function trackingDrill(levelId?: string): Drill {
   const L = (levelId && LEVEL_DEFS[levelId]) || LANE; const isLane = L === LANE;
-  let w: ReturnType<typeof makeWorld>, ctx: DrillCtx, lvl = LEVELS[1]; let on = 0, tot = 0, best = 0, streak = 0;
-  const ray = new THREE.Raycaster(); const center = new THREE.Vector2(0, 0); let cover: THREE.Object3D[] = []; const solids = levelSolids(L); let zipHit = 0, bumps = 0;
+  let w: ReturnType<typeof makeWorld>, ctx: DrillCtx, lvl = LEVELS[1]; let on = 0, tot = 0; const SK = new StreakKeeper(); let trackedT = 0, lastTier = 0;
+  const ray = new THREE.Raycaster(); const center = new THREE.Vector2(0, 0); let cover: THREE.Object3D[] = []; const solids = levelSolids(L); let zipHit = 0, bumps = 0, holdNow = "none";
   const eye = new THREE.Vector3(...L.vantage); const T: Target[] = []; let live = 0, tSwitch = 0;
   const nT = Math.max(1, L.targets ?? 1);
   for (let i = 0; i < nT; i++) { const head = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshLambertMaterial({ color: PAL.amber, emissive: 0x3a2200 }));
@@ -45,11 +46,11 @@ export function trackingDrill(levelId?: string): Drill {
         for (const [n, x, z, ry] of [["building_guardhouse", -11, -26, 0.4], ["building_tower", 12, -30, -0.3]] as const) { const b = getModel(n); if (b) { b.obj.position.set(x, 0, z); b.obj.rotation.y = ry; w.scene.add(b.obj); } } }
       else cover = buildLevel(w.scene, L);
       mk(); },
-    reset() { mk(); on = tot = best = streak = 0; ctx.input.yaw = L.yaw0 ?? 0; ctx.input.pitch = L.pitch0 ?? 0; },
+    reset() { mk(); on = tot = 0; SK.reset(); trackedT = 0; lastTier = 0; ctx.input.yaw = L.yaw0 ?? 0; ctx.input.pitch = L.pitch0 ?? 0; },
     setSettings() { w.setFov(ctx.settings.fov); }, resize() { w.resize(); },
     update(dt) {
       if (dt <= 0) return;
-      if (T.length > 1 && (tSwitch += dt) >= (L.switchS ?? 4)) { tSwitch = 0; live = (live + 1) % T.length; mover = T[live].mover; head = T[live].head; }
+      if (T.length > 1 && (tSwitch += dt) >= (L.switchS ?? 4)) { tSwitch = 0; live = (live + 1) % T.length; mover = T[live].mover; head = T[live].head; SK.switched(); trackedT = 0; } // #59 0.5 s grace
       T.forEach((t, i) => { const m = t.mover, pu = m.u, pv = m.v; m.step(dt);
         // #52 collision: a step that ends inside a solid is undone; the mover turns away (a dash or slide ends there)
         if (inSolid(t.path, m)) { m.u = pu; m.v = pv; m.vu = 0; m.vv = 0; m.heading(); bumps++; if (m.mode === "dash" || m.mode === "slide") m.set("walk"); unstick(m, () => inSolid(t.path, m)); } const p = freePoint(t.path, m.u, m.v, m.y);
@@ -59,17 +60,25 @@ export function trackingDrill(levelId?: string): Drill {
       w.cam.rotation.y = -ctx.input.yaw; w.cam.rotation.x = ctx.input.pitch; w.cam.updateMatrixWorld();
       ray.setFromCamera(center, w.cam); const hits = ray.intersectObjects([head, ...cover], true); const firing = ctx.weapon ? ctx.weapon.hold(dt) : true; const hit = firing && hits.length > 0 && hits[0].object === head; tot += dt;
       // #53: a target hit while on the zipline is knocked off after 0.12 s of hits (ESTIMATED; held fire lands several bullets)
-      if (hit && mover.mode === "zip") { if ((zipHit += dt) >= 0.12) { mover.knock(); zipHit = 0; ctx.fx.label(head.position.clone(), "KNOCKED OFF", "#e8a93c"); } } else zipHit = 0;
-      if (hit) { on += dt; const before = Math.floor(streak / 3); streak += dt; best = Math.max(best, streak); if (Math.floor(streak / 3) > before) { ctx.sfx.play("countdown", 0.6); ctx.fx.label(null, `${Math.floor(streak)} s streak`, "#e8a93c", "streakMeter"); } }
-      else { if (streak > 1) ctx.fx.label(null, "lost target", "#9aa4a8", "missFeedback"); streak = 0; }
+      if (hit && mover.mode === "zip") { if ((zipHit += dt) >= 0.12) { mover.knock(); zipHit = 0; ctx.sfx.play("knock"); ctx.fx.label(head.position.clone(), "KNOCKED OFF", "#e8a93c"); } } else zipHit = 0;
+      // #59 cover hold: the crosshair is on the head's line (within 2.5 head radii) but cover is in front of it
+      let covered = false; if (!hit) { const to = head.position.clone().sub(w.cam.position), dist = to.length(), fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(w.cam.quaternion);
+        if (fwd.angleTo(to) < Math.atan2(head.scale.x * 2.5, dist)) { const r2 = new THREE.Raycaster(w.cam.position, to.clone().normalize(), 0, dist); covered = r2.intersectObjects(cover, true).length > 0; } }
+      const before = SK.streak; const held = SK.update(dt, hit, covered); if (before > 1 && SK.streak === 0) { if (ctx.settings.cues.missFeedback) ctx.fx.label(null, "lost target", "#9aa4a8", "missFeedback"); ctx.sfx.play("miss", 0.6); }
+      if (hit) { on += dt; const tier = Math.min(5, Math.floor(SK.streak / 3)); if (tier > lastTier) { ctx.sfx.play(`streak${tier}`); ctx.fx.label(null, `${Math.floor(SK.streak)} s streak`, "#e8a93c", "streakMeter"); } lastTier = tier;
+        // #58: tracked long enough for this difficulty: the target breaks away (dash, air dash or hard turn)
+        if ((trackedT += dt) >= (EVADE_AFTER[ctx.settings.difficulty] ?? 1.2)) { trackedT = 0; mover.evade(); } }
+      else { trackedT = 0; if (SK.streak === 0) lastTier = 0; }
+      ctx.sfx.hum(Math.min(1, SK.streak / 15) * (held === "none" && !hit ? 0 : 1)); // #57 streak hum
+      holdNow = held;
     },
-    render() { w.cam.rotation.y = -ctx.input.yaw; w.cam.rotation.x = ctx.input.pitch; const glow = ctx.settings.cues.trackingGlow; (head.material as THREE.MeshLambertMaterial).emissive.setHex(glow && streak > 0 ? 0xb07000 : 0x3a2200);
-      (head.material as THREE.MeshLambertMaterial).color.setHex(glow && streak > 0 ? 0xffd27a : PAL.amber);
-      ctx.fx.meter = ctx.settings.cues.streakMeter ? { frac: streak / 10, text: `streak ${streak.toFixed(1)} s (best ${best.toFixed(1)})` } : null; w.renderer.render(w.scene, w.cam); },
-    hud() { return [(100 * on / Math.max(tot, 1e-6)).toFixed(1), streak.toFixed(1), best.toFixed(1), mover.mode]; },
-    result() { const p = 100 * on / Math.max(tot, 1e-6); return { score: +p.toFixed(1), metrics: { onTargetPct: +p.toFixed(1), bestStreakS: +best.toFixed(2), seconds: +tot.toFixed(1), modeChanges: mover.log.length, illegalTransitions: mover.illegal, knockoffs: T.reduce((a, t) => a + t.mover.knocks, 0), bumps } }; },
+    render() { w.cam.rotation.y = -ctx.input.yaw; w.cam.rotation.x = ctx.input.pitch; const glow = ctx.settings.cues.trackingGlow; (head.material as THREE.MeshLambertMaterial).emissive.setHex(glow && SK.streak > 0 ? 0xb07000 : 0x3a2200);
+      (head.material as THREE.MeshLambertMaterial).color.setHex(glow && SK.streak > 0 ? 0xffd27a : PAL.amber);
+      ctx.fx.meter = ctx.settings.cues.streakMeter ? { frac: SK.streak / 10, text: `streak ${SK.streak.toFixed(1)} s (best ${SK.best.toFixed(1)})${holdNow === "cover" ? " held: behind cover" : holdNow !== "none" ? " held" : ""}` } : null; w.renderer.render(w.scene, w.cam); },
+    hud() { return [(100 * on / Math.max(tot, 1e-6)).toFixed(1), SK.streak.toFixed(1), SK.best.toFixed(1), mover.mode]; },
+    result() { const p = 100 * on / Math.max(tot, 1e-6); return { score: +p.toFixed(1), metrics: { onTargetPct: +p.toFixed(1), bestStreakS: +SK.best.toFixed(2), evades: T.reduce((a, t) => a + t.mover.evades, 0), airDashes: T.reduce((a, t) => a + t.mover.airDashes, 0), streakHeldS: +(SK.holds.switch + SK.holds.cover + SK.holds.reacquire).toFixed(2), seconds: +tot.toFixed(1), modeChanges: mover.log.length, illegalTransitions: mover.illegal, knockoffs: T.reduce((a, t) => a + t.mover.knocks, 0), bumps } }; },
   };
   drill.hooks = { level: L.id, get live() { return live; }, get mover() { return mover; }, get dummy() { const d = T[live].dummy; return d ? { clip: d.cur, face: d.face } : null; },
-    get headPos() { return head.position.toArray(); }, get bumps() { return bumps; }, solids, targets: T, inSolid, autoAim() { const a = aimAngles(eye, head.position); ctx.input.yaw = a.yaw; ctx.input.pitch = a.pitch; } };
+    get headPos() { return head.position.toArray(); }, get bumps() { return bumps; }, get streak() { return SK; }, get hold() { return holdNow; }, solids, targets: T, inSolid, autoAim() { const a = aimAngles(eye, head.position); ctx.input.yaw = a.yaw; ctx.input.pitch = a.pitch; } };
   return drill;
 }

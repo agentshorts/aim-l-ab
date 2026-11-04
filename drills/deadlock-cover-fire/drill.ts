@@ -5,13 +5,15 @@ import { getModel } from "../../core/models";
 import { DummyView } from "../deadlock-tracking/dummy";
 import { MOVE } from "../../core/spec";
 import { CoverSim, Peek, DIFFS, Enemy } from "./sim";
+import { StreakKeeper } from "../../core/streak";
 /** Player cover: a wall 1.2 m ahead, 3.2 m wide and taller than eye height. Leaning out moves the eye PEEK_X to the peek side. */
 export const WALL = { z: -1.2, half: 1.6, h: 1.9 }, PEEK_X = 2.3, EYE = 1.7;
 type View = { hero: ReturnType<typeof makeTrooper>; dummy: DummyView | null };
 export function coverFireDrill(): Drill {
   let w: ReturnType<typeof makeWorld>, ctx: DrillCtx, sim: CoverSim; const peek = new Peek(); let hold = { key: false, mouse: false };
   const ray = new THREE.Raycaster(), center = new THREE.Vector2(0, 0); const views = new Map<number, View>(); let blockers: THREE.Object3D[] = []; let coverGroup: THREE.Group | null = null;
-  let on = 0, exposedT = 0, streak = 0, best = 0, hitTick = 0, seen = 0, lostAt: number | null = null;
+  const SK = new StreakKeeper(); let trackedId = -1, lastTier = 0, combo = 0, lastKill = -9, wasPeeked = false, holdNow = "none";
+  let on = 0, exposedT = 0, hitTick = 0, seen = 0, lostAt: number | null = null;
   const RED = "#d0563b", AMBER = "#e8a93c";
   const wpos = (e: Enemy, y = 0) => new THREE.Vector3(e.x, y + e.y, -e.z);
   const mkCover = () => {
@@ -43,13 +45,15 @@ export function coverFireDrill(): Drill {
     init(cx) { ctx = cx; w = makeWorld(cx.canvas, cx.settings.fov); cx.fx.cam = w.cam;
       addEventListener("keydown", onKey(true)); addEventListener("keyup", onKey(false)); cx.canvas.addEventListener("mousedown", onMouse(true)); addEventListener("mouseup", onMouse(false)); cx.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
       mk(); },
-    reset() { mk(); on = exposedT = streak = best = hitTick = 0; hold = { key: false, mouse: false }; ctx.input.yaw = 0; ctx.input.pitch = -0.03; },
+    reset() { mk(); on = exposedT = hitTick = 0; SK.reset(); trackedId = -1; lastTier = 0; combo = 0; lastKill = -9; wasPeeked = false; hold = { key: false, mouse: false }; ctx.input.yaw = 0; ctx.input.pitch = -0.03; },
     setSettings(s) { w.setFov(s.fov); }, resize() { w.resize(); },
     update(dt, _clicks, now) {
       if (dt <= 0) return; peek.step(dt, hold.key || hold.mouse); sim.step(dt); if (bot) botAim(); camUpdate();
       for (; seen < sim.events.length; seen++) { const ev = sim.events[seen]; const e = sim.enemies.find((x) => x.id === ev.id);
         if (ev.type === "dash" && e && ctx.settings.cues.missFeedback) ctx.fx.label(wpos(e, 2.3), "DASH", AMBER);
-        if (ev.type === "dead" && e) { ctx.fx.label(wpos(e, 2.3), "KILL +100", "#7fcf6a"); ctx.fx.hitMarker(true); ctx.fx.flash("rgba(127,207,106,.8)"); ctx.sfx.play("kill"); }
+        if (ev.type === "dead" && e) { ctx.fx.label(wpos(e, 2.3), "KILL +100", "#7fcf6a"); ctx.fx.hitMarker(true); ctx.fx.flash("rgba(127,207,106,.8)"); ctx.sfx.play("kill");
+          // #57 kill combo (kills within 3 s), #59 the next target is a switch: 0.5 s grace
+          combo = sim.t - lastKill < 3 ? combo + 1 : 1; lastKill = sim.t; if (combo >= 2) { ctx.sfx.play(`combo${Math.min(4, combo)}`); ctx.fx.label(null, `${combo}x`, "#7fcf6a"); } if (e.id === trackedId) { SK.switched(); trackedId = -1; } }
         if (ev.type === "lost") { lostAt = now; ctx.fx.flash("rgba(208,86,59,.95)"); ctx.fx.label(null, "THEY REACHED YOUR COVER", RED); ctx.sfx.play("lost"); } }
       const ex = sim.exposed(); if (ex.length) exposedT += dt;
       // first thing the crosshair ray hits: your wall and enemy cover block shots, enemies behind cover take nothing
@@ -58,9 +62,14 @@ export function coverFireDrill(): Drill {
       const id = hit ? [...views.entries()].find(([, v]) => v.hero.hit === hit.object)?.[0] : undefined; const tgt = id ? sim.enemies.find((e) => e.id === id) : undefined;
       dbg[!hit ? "none" : hit.object === blockers[0] ? "wall" : blockers.includes(hit.object) ? "cover" : "enemy"]++; if (sim.exposed().length) dbg.exposedFrames++;
       const firing = peek.canShoot && (ctx.weapon ? ctx.weapon.hold(dt) : true);
-      if (firing && tgt && tgt.state === "moving") { on += dt; streak += dt; best = Math.max(best, streak); const r = sim.damage(tgt.id, dt);
+      if (peek.canShoot && !wasPeeked) ctx.sfx.play("peek"); wasPeeked = peek.canShoot;
+      const onT = !!(firing && tgt && tgt.state === "moving"); if (onT) trackedId = tgt!.id;
+      // #59: hold the streak while the enemy being tracked is behind cover (not moving and alive)
+      const te = sim.enemies.find((x) => x.id === trackedId), covered = !!te && te.state !== "moving" && te.state !== "dead";
+      const before = SK.streak; holdNow = SK.update(dt, onT, covered); if (before > 0.6 && SK.streak === 0 && ctx.settings.cues.missFeedback) ctx.fx.label(null, "lost track", "#9aa4a8", "missFeedback");
+      const tier = Math.min(5, Math.floor(SK.streak / 3)); if (tier > lastTier) ctx.sfx.play(`streak${tier}`); lastTier = SK.streak === 0 ? 0 : tier; ctx.sfx.hum(Math.min(1, SK.streak / 15));
+      if (onT && tgt) { on += dt; const r = sim.damage(tgt.id, dt);
         if (r === "hit" && (hitTick += dt) > 0.12) { hitTick = 0; ctx.sfx.play("hit", 0.4); ctx.fx.hitMarker(false); } }
-      else { if (streak > 0.6 && ctx.settings.cues.missFeedback) ctx.fx.label(null, "lost track", "#9aa4a8", "missFeedback"); streak = 0; }
     },
     render() {
       camUpdate(); const live = new Set(sim.enemies.map((e) => e.id));
@@ -74,15 +83,15 @@ export function coverFireDrill(): Drill {
         v.hero.g.visible = e.state !== "dead";
         const d = sim.dist(e); if (e.state !== "dead" && d < sim.d.loseDist + 5) ctx.fx.rings.push({ pos: wpos(e, 1.2), frac: Math.max(0, (d - sim.d.loseDist) / 5), color: RED, label: `${d.toFixed(1)} m` });
         else if (e.state === "moving" && ctx.settings.cues.trackingGlow) ctx.fx.rings.push({ pos: wpos(e, 1.2), frac: e.hp / e.max, color: AMBER, r: 10, width: 2 }); }
-      ctx.fx.meter = ctx.settings.cues.streakMeter ? { frac: Math.min(1, streak / 2), text: `${peek.canShoot ? "PEEKING" : peek.state === "cover" ? "IN COVER" : "LEANING"} ${sim.side > 0 ? "right" : "left"}  track ${streak.toFixed(1)} s` } : null;
+      ctx.fx.meter = ctx.settings.cues.streakMeter ? { frac: Math.min(1, SK.streak / 2), text: `${peek.canShoot ? "PEEKING" : peek.state === "cover" ? "IN COVER" : "LEANING"} ${sim.side > 0 ? "right" : "left"}  track ${SK.streak.toFixed(1)} s${holdNow === "cover" ? " (held: behind cover)" : holdNow !== "none" ? " (held)" : ""}` } : null;
       w.renderer.render(w.scene, w.cam); },
     hud() { return [String(sim.kills), Number.isFinite(sim.closest) ? sim.closest.toFixed(1) : "-", (100 * on / Math.max(exposedT, 1e-6)).toFixed(1), `${sim.side > 0 ? "R" : "L"} ${peek.state}`, sim.t.toFixed(1)]; },
     result() { const survived = sim.round !== "lost"; const sec = Math.floor(sim.t); const score = 100 * sim.kills + 5 * sec + (survived ? 250 : 0);
       return { score, metrics: { kills: sim.kills, survivedS: +sim.t.toFixed(1), lost: survived ? 0 : 1, closestM: +(Number.isFinite(sim.closest) ? sim.closest : 0).toFixed(2), onTargetPct: +(100 * on / Math.max(exposedT, 1e-6)).toFixed(1),
-        bestTrackS: +best.toFixed(2), peekedPct: +(100 * peek.peekedS / Math.max(sim.t, 1e-6)).toFixed(1), dashes: sim.enemies.reduce((a, e) => a + e.dashes, 0), illegalTransitions: peek.illegal + sim.enemies.reduce((a, e) => a + e.illegal, 0) } }; },
+        bestTrackS: +SK.best.toFixed(2), streakHeldS: +(SK.holds.switch + SK.holds.cover + SK.holds.reacquire).toFixed(2), peekedPct: +(100 * peek.peekedS / Math.max(sim.t, 1e-6)).toFixed(1), dashes: sim.enemies.reduce((a, e) => a + e.dashes, 0), illegalTransitions: peek.illegal + sim.enemies.reduce((a, e) => a + e.illegal, 0) } }; },
     ended() { return sim.round === "lost" && lostAt !== null; },
   };
-  drill.hooks = { get sim() { return sim; }, peek, setPeek(b: boolean) { hold.key = b; }, set bot(b: boolean) { bot = b; }, dbg,
+  drill.hooks = { get sim() { return sim; }, get streak() { return SK; }, get hold() { return holdNow; }, peek, setPeek(b: boolean) { hold.key = b; }, set bot(b: boolean) { bot = b; }, dbg,
     aimAt(e: Enemy) { const eye = w.cam.position; const dx = e.x - eye.x, dz = -e.z - eye.z, dy = 1.0 + e.y - eye.y; ctx.input.yaw = Math.atan2(dx, -dz); ctx.input.pitch = Math.atan2(dy, Math.hypot(dx, dz)); } };
   return drill;
 }

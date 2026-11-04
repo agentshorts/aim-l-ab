@@ -20,6 +20,8 @@ export function soulsDrill(layoutId?: string): Drill {
   const GREEN = "#7fcf6a", AMBER = "#e8a93c";
   const orbPos = (o: Orb) => new THREE.Vector3(o.x, orbY(o), -o.z);
   const orbY = (o: Orb) => o.y + Math.min(0.6, (sim.t - o.born) * 1.5);
+  let combo = 0; // #57: consecutive good shots (last hit, secure, deny) without a miss: rising chime on top of the hit sound
+  const good = (at: THREE.Vector3) => { combo++; if (combo >= 2) { ctx.sfx.play(`combo${Math.min(4, combo)}`, 0.9); if (combo >= 3) ctx.fx.label(at.clone().add(new THREE.Vector3(0, 0.6, 0)), `${combo} in a row`, "#ffd27a"); } c.bestCombo = Math.max(c.bestCombo || 0, combo); };
   function fire() {
     ray.setFromCamera(center, w.cam); const targets: THREE.Object3D[] = [];
     for (const [id, v] of ov) { const o = sim.orbs.find((x) => x.id === id); if (o && o.state !== "claimed") targets.push(v.g); }
@@ -27,14 +29,14 @@ export function soulsDrill(layoutId?: string): Drill {
     const hit0 = ray.intersectObjects([...targets, ...cover], true)[0]; // #54 layout props block shots
     const hit = hit0 && targets.some((t) => t === hit0.object || t.getObjectById(hit0.object.id)) ? hit0 : undefined;
     const { fx, sfx } = ctx;
-    if (!hit) { add("miss"); fx.label(null, "miss", "#9aa4a8", "missFeedback"); sfx.play("miss"); return "miss"; }
+    if (!hit) { add("miss"); combo = 0; fx.label(null, "miss", "#9aa4a8", "missFeedback"); sfx.play("miss"); return "miss"; }
     for (const [id, v] of ov) if (hit.object.parent === v.g) { const o = sim.orbs.find((x) => x.id === id)!; const r = sim.shootOrb(o); add(r.res); const at = orbPos(o);
       if (r.res === "secure" || r.res === "deny") { errs.push(r.errMs); fx.hitMarker(true); const sec = r.res === "secure";
-        fx.label(at, `${sec ? "SECURED" : "DENIED"} +2 (${r.errMs >= 0 ? "+" : ""}${r.errMs.toFixed(0)} ms)`, sec ? GREEN : AMBER); fx.flash(sec ? "rgba(127,207,106,.9)" : "rgba(232,169,60,.9)"); sfx.play(r.res); }
-      else { fx.label(at, r.res === "early" ? "EARLY: orb still dark" : "LATE: already claimed", "#9aa4a8", "missFeedback"); sfx.play("miss"); }
+        fx.label(at, `${sec ? "SECURED" : "DENIED"} +2 (${r.errMs >= 0 ? "+" : ""}${r.errMs.toFixed(0)} ms)`, sec ? GREEN : AMBER); fx.flash(sec ? "rgba(127,207,106,.9)" : "rgba(232,169,60,.9)"); sfx.play(r.res); good(at); }
+      else { combo = 0; fx.label(at, r.res === "early" ? "EARLY: orb still dark" : "LATE: already claimed", "#9aa4a8", "missFeedback"); sfx.play("miss"); }
       return r.res; }
     for (const [id, v] of tv) if (hit.object === v.hit) { const t = sim.troopers.find((x) => x.id === id)!; const r = sim.shootTrooper(t); add(r.res); const at = new THREE.Vector3(t.x, 2.2, -t.z);
-      if (r.res === "lasthit") lhErrs.push(r.errMs);
+      if (r.res === "lasthit") { lhErrs.push(r.errMs); good(at); }
       const fb = trooperFeedback(r.res); if (fb.marker) fx.hitMarker(fb.marker === "kill"); if (fb.number) fx.number(at, fb.number.text, fb.number.color); if (fb.sound) sfx.play(fb.sound);
       return r.res; }
     return "none";
@@ -49,7 +51,7 @@ export function soulsDrill(layoutId?: string): Drill {
     hudLabels: ["last hits", "secures", "denies", "lost orbs", "orb ms"],
     init(cx) { ctx = cx; w = makeWorld(cx.canvas, cx.settings.fov); cx.fx.cam = w.cam; w.cam.position.copy(eye);
       if (LY) { cover = buildLevel(w.scene, LY); buildZips(w.scene, LY.zips ?? []); } else { zipline(w.scene, -5, 4.5, 4, -60); zipline(w.scene, 5, 4.5, 4, -60); } mk(); },
-    reset() { clearViews(); mk(); c = {}; errs = []; lhErrs = []; seen = 0; ctx.input.yaw = LY?.souls?.yaw0 ?? 0; ctx.input.pitch = LY?.souls?.pitch0 ?? -0.02; },
+    reset() { clearViews(); mk(); c = {}; combo = 0; errs = []; lhErrs = []; seen = 0; ctx.input.yaw = LY?.souls?.yaw0 ?? 0; ctx.input.pitch = LY?.souls?.pitch0 ?? -0.02; },
     setSettings(s: Settings) { w.setFov(s.fov); },
     resize() { w.resize(); },
     update(dt, clicks) {
@@ -77,7 +79,7 @@ export function soulsDrill(layoutId?: string): Drill {
     },
     hud() { return [String(c.lasthit || 0), String(c.secure || 0), String(c.deny || 0), String(c.lostOrb || 0), mean(errs).toFixed(0)]; },
     result() { const score = (c.lasthit || 0) + 2 * (c.secure || 0) + 2 * (c.deny || 0) - (c.lostOrb || 0);
-      return { score, metrics: { lastHits: c.lasthit || 0, secures: c.secure || 0, denies: c.deny || 0, lostOrbs: c.lostOrb || 0, autoClaimed: c.autoClaim || 0, missedDenies: c.missedDeny || 0, earlyOrbShots: c.early || 0, misses: c.miss || 0, orbErrMs: +mean(errs).toFixed(1), lastHitErrMs: +mean(lhErrs).toFixed(1) } }; },
+      return { score, metrics: { lastHits: c.lasthit || 0, secures: c.secure || 0, denies: c.deny || 0, lostOrbs: c.lostOrb || 0, autoClaimed: c.autoClaim || 0, missedDenies: c.missedDeny || 0, earlyOrbShots: c.early || 0, misses: c.miss || 0, orbErrMs: +mean(errs).toFixed(1), lastHitErrMs: +mean(lhErrs).toFixed(1), bestCombo: c.bestCombo || 0 } }; },
   };
   drill.hooks = { get sim() { return sim; }, fire, aimAt(x: number, y: number, z: number) { const a = aimAngles(eye, new THREE.Vector3(x, y, -z)); ctx.input.yaw = a.yaw; ctx.input.pitch = a.pitch; }, orbY, ORB, layout: LY?.id ?? "street" };
   return drill;

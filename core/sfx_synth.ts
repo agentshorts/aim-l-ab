@@ -19,6 +19,8 @@ export function chaching(sr: number) { const o = buf(1.2, sr); const c = Math.fl
 const gain = (s: Float32Array, g: number) => { for (let i = 0; i < s.length; i++) s[i] *= g; return s; };
 const sum = (...ss: Float32Array[]) => { const o = new Float32Array(Math.max(...ss.map((s) => s.length))); for (const s of ss) for (let i = 0; i < s.length; i++) o[i] += s[i]; return o; };
 // event -> placeholder sound. Real licensed files later replace entries via AudioCore.load(name, url).
+/** notes played one after another (step s apart), each a decaying ding; the last rings for tail s */
+export function arp(fs: number[], step: number, sr: number, tail = 0.45) { const o = buf(step * (fs.length - 1) + tail, sr); fs.forEach((f, k) => { const d = ding(f, k === fs.length - 1 ? tail : step * 2.5, sr), at = Math.floor(k * step * sr); for (let i = 0; i < d.length && at + i < o.length; i++) o[at + i] += d[i] * 0.8; }); return o; }
 export const SFX: Record<string, Synth> = {
   hit: (sr) => gain(clank(0.18, sr), 0.5),
   lasthit: (sr) => sum(gain(ding(1760, 0.5, sr), 0.45), gain(bass(0.35, sr), 0.6)),
@@ -29,4 +31,11 @@ export const SFX: Record<string, Synth> = {
   miss: (sr) => gain(whoosh(0.16, sr, true), 0.25),
   countdown: (sr) => gain(ding(880, 0.25, sr), 0.35),
   go: (sr) => gain(ding(1320, 0.4, sr), 0.45),
+  // #57 reward sounds. streakN: a rising pentatonic arpeggio, one note longer per tier (3 s, 6 s, 9 s, 12 s, 15 s+).
+  ...Object.fromEntries([1, 2, 3, 4, 5].map((n) => [`streak${n}`, (sr: number) => gain(arp([880, 987.77, 1108.73, 1318.51, 1479.98, 1760].slice(0, n + 1), 0.07, sr), 0.4)])),
+  combo2: (sr) => gain(arp([1318.51, 1760], 0.06, sr), 0.35), combo3: (sr) => gain(arp([1108.73, 1318.51, 1760], 0.06, sr), 0.38), combo4: (sr) => gain(arp([880, 1108.73, 1318.51, 1760, 2217.46], 0.055, sr), 0.3),
+  knock: (sr) => sum(gain(clank(0.25, sr), 0.4), gain(ding(660, 0.3, sr), 0.3)),
+  peek: (sr) => gain(whoosh(0.12, sr, true), 0.12),
+  best: (sr) => gain(arp([659.25, 830.61, 987.77, 1318.51, 1661.22, 1975.53], 0.09, sr, 0.9), 0.45),
+  done: (sr) => gain(arp([880, 1318.51], 0.12, sr, 0.6), 0.35),
 };

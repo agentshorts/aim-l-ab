@@ -1,0 +1,70 @@
+{
+ "tracking": {
+  "streakS": 12.4,
+  "humMax": 0.83,
+  "evades": 24,
+  "airDashes": 2,
+  "dashes": 5,
+  "illegal": 0,
+  "staminaNow": 0.76,
+  "played": {
+   "countdown": 3,
+   "go": 1,
+   "streak1": 1,
+   "streak2": 1,
+   "streak3": 1,
+   "streak4": 1
+  },
+  "endSounds": {
+   "countdown": 3,
+   "go": 1,
+   "streak1": 1,
+   "streak2": 1,
+   "streak3": 1,
+   "streak4": 1,
+   "streak5": 1,
+   "done": 1
+  }
+ },
+ "switching": {
+  "switches": 2,
+  "framesHeld": {
+   "switch": 31
+  },
+  "resetsDuringLag": 0,
+  "streakS": 10.9,
+  "switchHoldS": 0.65,
+  "resets": 0
+ },
+ "cover": {
+  "coverHoldS": 0,
+  "reacquireS": 0,
+  "switchHoldS": 1.38,
+  "best": 1.6,
+  "humMax": 0.11,
+  "sawCoverHold": false,
+  "played": {
+   "countdown": 3,
+   "go": 1,
+   "peek": 1,
+   "hit": 53,
+   "kill": 6,
+   "combo2": 2,
+   "combo3": 1,
+   "lost": 1,
+   "done": 1
+  }
+ },
+ "souls": {
+  "played": {
+   "countdown": 3,
+   "go": 1,
+   "deny": 3,
+   "secure": 2,
+   "combo2": 1,
+   "miss": 3,
+   "lost": 1
+  }
+ },
+ "errors": []
+}

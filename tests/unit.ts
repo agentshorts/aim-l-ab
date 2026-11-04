@@ -13,7 +13,9 @@ import { normalize as norm2, CUE_KEYS as CK } from "../core/settings";
 import { SoulSim } from "../drills/deadlock-souls/sim";
 import { Mover } from "../drills/deadlock-tracking/mover";
 import { MOVE, TROOPER, ORB } from "../core/spec";
-import { FreeMover, FREE_RATES } from "../core/freemove";
+import { FreeMover, FREE_RATES, EVADE_AFTER, STAMINA } from "../core/freemove";
+import { StreakKeeper, GRACE_SWITCH_S } from "../core/streak";
+import { humParams, HUM_STEPS } from "../core/audio";
 import { CoverSim, Peek, DIFFS, ROWS, PEEK_S } from "../drills/deadlock-cover-fire/sim";
 import { cm360ToDeadlockSens, deadlockSensToCm360, radPerCountFromCm360 } from "../core/sens";
 import { parseShare, loadCrosshair, DEFAULT_CROSSHAIR, toShare, CROSSHAIR_KEY, pipOffset } from "../core/crosshair";
@@ -135,12 +137,12 @@ ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToC
 { const box = { u0: -9, u1: 9, v0: -2.5, v1: 2.5 }; const all = ["walk", "dash", "slide", "air", "zip"] as any; const counts: number[] = []; let inBox = true, quad = new Set<string>(), illegal = 0, vmax = 0, top = 0;
   for (let lv = 0; lv < 4; lv++) { const m = new FreeMover(all, box, FREE_RATES[lv], 21 + lv); for (let i = 0; i < 144 * 120; i++) { m.step(1 / 144);
       if (m.u < box.u0 - 1e-9 || m.u > box.u1 + 1e-9 || m.v < box.v0 - 1e-9 || m.v > box.v1 + 1e-9 || m.y < 0) inBox = false; if (m.speed > 1) quad.add(`${Math.sign(m.vu)},${Math.sign(m.vv)}`);
-      if (m.mode === "dash") vmax = Math.max(vmax, m.speed); if (m.mode === "air" && m.log.length > 1 && m.log[m.log.length - 2].mode !== "zip") top = Math.max(top, m.y); }
+      if (m.mode === "dash") vmax = Math.max(vmax, m.speed); if (m.mode === "air" && m.log.length > 1 && ["walk", "slide"].includes(m.log[m.log.length - 2].mode)) top = Math.max(top, m.y); }
     counts.push(m.turns + m.dashes + m.jumps); illegal += m.illegal; }
   ok("free movement: 2 min per difficulty stays inside the box, no illegal transitions", inBox && illegal === 0);
   ok("free movement: moves in all four quadrants (left/right and toward/away)", quad.size >= 8, [...quad].join(" "));
   ok("free movement: turns, dashes and jumps get more frequent with difficulty", counts.every((c, i) => i === 0 || c > counts[i - 1]), counts.join(" < "));
-  ok("free movement: dash peak is the spec peak, jump apex about 1.14 m (zip drops excluded)", vmax <= MOVE.dash.b2.peak + 1e-6 && vmax > MOVE.dash.b2.peak * 0.95 && top > 1.0 && top < 1.3, `dash ${vmax.toFixed(2)} m/s, apex ${top.toFixed(2)} m`);
+  ok("free movement: dash peak is the spec peak, jump apex about 1.14 m (zip drops and air dashes excluded)", vmax <= MOVE.dash.b2.peak + 1e-6 && vmax > MOVE.dash.b2.peak * 0.95 && top > 1.0 && top < 1.3, `dash ${vmax.toFixed(2)} m/s, apex ${top.toFixed(2)} m`);
   const g = new CoverSim(DIFFS[3], 31, 3); let lat = 0, back = 0, jumps = 0; for (let i = 0; i < 120 * 60 && g.round === "running"; i++) { g.step(1 / 120);
     for (const e of g.exposed()) { if (!e.dashing && Math.abs(e.vx * (e.toZ - e.z) - e.vz * (e.toX - e.x)) / (Math.hypot(e.toX - e.x, e.toZ - e.z) || 1) > 2) lat++; if (!e.dashing && e.back > 0) back++; } }
   jumps = g.enemies.reduce((a, e) => a + e.jumps, 0) + g.kills;
@@ -177,5 +179,31 @@ ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToC
 { const b = readFileSync("assets/models/wall_straight_v1.glb"); const g: any = await new Promise((res, rej) => new GLTFLoader().parse(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength), "", res, rej)); fixStrips(g.scene);
   let hgt = 0, off = false; g.scene.traverse((o: any) => { if (o.isMesh && /_E$/.test(o.material.name)) { o.geometry.computeBoundingBox(); hgt = o.geometry.boundingBox.max.y - o.geometry.boundingBox.min.y; off = o.material.polygonOffset && o.material.polygonOffsetFactor < 0; } });
   ok("#56 glow strips are pulled forward in depth and 1.6x taller (8 cm to 12.8 cm)", off && Math.abs(hgt - 0.128) < 1e-3, `${hgt.toFixed(3)} m`); }
+
+// ---- #57 sounds, #58 harder targets and air dashes, #59 streak forgiveness ----
+{ const names = ["streak1", "streak2", "streak3", "streak4", "streak5", "combo2", "combo3", "combo4", "knock", "peek", "best", "done"]; let bad: string[] = [];
+  for (const n of names) { const f = SFX[n]; if (!f) { bad.push(n + " missing"); continue; } const x = f(48000); let pk = 0, fin = true; for (const v of x) { if (!Number.isFinite(v)) fin = false; pk = Math.max(pk, Math.abs(v)); } if (!fin || pk > 1 || pk < 0.02 || x.length < 2400) bad.push(`${n} peak ${pk.toFixed(2)}`); }
+  ok("#57 reward sounds exist, are finite, audible and do not clip", bad.length === 0, bad.join(", "));
+  const tiers = [1, 2, 3, 4, 5].map((n) => SFX[`streak${n}`](48000).length); ok("#57 higher streak tiers play longer arpeggios", tiers.every((l, i) => i === 0 || l > tiers[i - 1]));
+  const hp = [0, 0.1, 0.3, 0.5, 0.7, 0.9, 1].map(humParams); ok("#57 streak hum: silent at 0, then pitch and loudness only rise, every pitch a pentatonic note, soft (gain at most 0.11)",
+    hp[0].gain === 0 && hp.every((p, i) => i === 0 || (p.freq >= hp[i - 1].freq && p.gain > hp[i - 1].gain)) && hp.every((p) => HUM_STEPS.includes(p.freq) && p.gain <= 0.11 + 1e-9) && hp[6].freq > hp[1].freq); }
+{ const box = { u0: -9, u1: 9, v0: -2.5, v1: 2.5 }, all = ["walk", "dash", "slide", "air"] as any; const res: any[] = [];
+  for (let lv = 0; lv < 4; lv++) { const m = new FreeMover(all, box, FREE_RATES[lv], 40 + lv); let minSt = 9, multi = 0, up = 0, perJump = 0, prevY = 0;
+    for (let i = 0; i < 144 * 180; i++) { const ad0 = m.airDashes; m.step(1 / 144); minSt = Math.min(minSt, m.stamina); if (m.mode === "dash" && m.airDash && m.y > prevY + 1e-6) up++; prevY = m.y;
+      if (m.airDashes > ad0) { perJump++; if (perJump === 2) multi++; } if (m.mode === "walk") perJump = 0; }
+    res.push({ air: m.airDashes, multi, up, minSt, illegal: m.illegal }); }
+  ok("#58 air dashes: none on Easy, more with difficulty, some go upward, some jumps chain 2+ air dashes on Hard/Pro", res[0].air === 0 && res[1].air < res[2].air && res[2].air < res[3].air && res[3].up > 0 && res[2].multi + res[3].multi > 0, JSON.stringify(res.map((r) => [r.air, r.multi, r.up])));
+  ok("#58 stamina never goes below zero (3 bars, 4.5 s regen) and no illegal transitions", res.every((r) => r.minSt >= -1e-9 && r.illegal === 0) && STAMINA.bars === 3);
+  const ev: number[] = [], turn: number[] = []; for (let lv = 0; lv < 4; lv++) { const m = new FreeMover(all, box, FREE_RATES[lv], 9); let tr = 0, turned = 0, n = 0;
+    for (let i = 0; i < 144 * 60; i++) { const du = m.vu, dv = m.vv; m.step(1 / 144); if ((tr += 1 / 144) >= EVADE_AFTER[lv]) { tr = 0; const sp = Math.hypot(du, dv); if (m.evade() && sp > 1) { const a = Math.acos(Math.max(-1, Math.min(1, (du * m.hu + dv * m.hv) / sp))); n++; if (a > Math.PI / 3) turned++; } } }
+    ev.push(m.evades); turn.push(n ? turned / n : 1); }
+  ok("#58 a tracked target breaks away sooner the harder the mode (evades per minute of tracking rise), each break turns at least 60 degrees", ev.every((e, i) => i === 0 || e > ev[i - 1]) && turn.every((t) => t > 0.99), `${ev.join(" < ")} turned ${turn.map((t) => t.toFixed(2))}`); }
+{ const dt = 1 / 144, run = (k: StreakKeeper, s: number, on: boolean, cov: boolean) => { for (let t = 0; t < s - 1e-9; t += dt) k.update(dt, on, cov); };
+  let k = new StreakKeeper(); run(k, 2, true, false); k.switched(); run(k, 0.4, false, false); const held = k.streak; run(k, 0.3, true, false);
+  ok("#59 target switch: streak holds through a 0.4 s move to the new target, without growing while held", Math.abs(held - 2) < 0.02 && k.streak > 2.25, `${held.toFixed(2)} -> ${k.streak.toFixed(2)}`);
+  k = new StreakKeeper(); run(k, 2, true, false); k.switched(); run(k, GRACE_SWITCH_S + 0.05, false, false); ok("#59 switch grace is 0.5 s: later than that the streak resets", k.streak === 0);
+  k = new StreakKeeper(); run(k, 2, true, false); run(k, 3, false, true); const c1 = k.streak; run(k, 0.3, false, false); const c2 = k.streak; run(k, 0.3, false, false);
+  ok("#59 cover: the streak holds while the target is behind cover (3 s), then 0.5 s to get back on it", Math.abs(c1 - 2) < 0.02 && Math.abs(c2 - 2) < 0.02 && k.streak === 0 && k.holds.cover > 2.9);
+  k = new StreakKeeper(); run(k, 2, true, false); k.update(dt, false, false); ok("#59 no forgiveness for simply missing: off target with no switch or cover resets at once", k.streak === 0); }
 console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);
 })();
