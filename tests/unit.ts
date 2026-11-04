@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { SFX } from "../core/sfx_synth";
 import { readFileSync } from "fs";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { LEVEL_DEFS, LEVEL_ORDER, pathPoint, pathLen, pathYaw, pathModes, aimAngles } from "../drills/deadlock-tracking/levels";
 import { MODEL_NAMES, MODEL_VERSION, stripRootMotion } from "../core/models";
 import { clipFor, facingFor } from "../drills/deadlock-tracking/dummy";
 import { PROFILES, sampleQ } from "../drills/deadlock-tracking/profile";
@@ -99,5 +100,12 @@ ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToC
     console.log(`  info: mid-slide lowest vertex y = ${lo.toFixed(3)} m (ground 0)`); ok("slide pose measured against ground (report only)", Number.isFinite(lo), `${lo.toFixed(3)} m`); }
   ok("mover state to clip mapping", clipFor("dash", 9) === "dash" && clipFor("slide", 3) === "slide" && clipFor("air", 0) === "jump" && clipFor("walk", 6) === "run" && clipFor("walk", 0) === "idle" && clipFor("zip", 18) === "idle");
   ok("dummy faces its travel direction (clip +Z to world +/-X)", facingFor(5, 0) === Math.PI / 2 && facingFor(-5, 0) === -Math.PI / 2 && facingFor(0, 1) === 1); }
+{ const lane = { a: [-9, 0, -15] as [number, number, number], b: [9, 0, -15] as [number, number, number] }; const p = pathPoint(lane, 3, 0.5);
+  ok("level system: lane path maps mover x straight onto world x", p.x === 3 && p.y === 0.5 && p.z === -15 && pathLen(lane) === 18);
+  const ramp = { a: [0, 0, -10] as [number, number, number], b: [0, 4, -18] as [number, number, number] }; ok("level system: ramp paths carry height", Math.abs(pathPoint(ramp, 0, 0).y - 2) < 1e-9);
+  ok("level system: dummy yaw follows path and travel sign", Math.abs(pathYaw(lane, 1) - Math.PI / 2) < 1e-9 && Math.abs(pathYaw(lane, -1) + Math.PI / 2) < 1e-9);
+  ok("level system: zipline only on paths with a cable", pathModes(lane, ["walk", "zip"]).join() === "walk" && pathModes({ ...lane, zip: true }, ["walk", "zip"]).join() === "walk,zip");
+  const a = aimAngles(new THREE.Vector3(0, 9.7, 0), new THREE.Vector3(0, 1.7, -8)); ok("level system: aim angles look down at a target below", Math.abs(a.yaw) < 1e-9 && Math.abs(a.pitch + Math.PI / 4) < 1e-9);
+  for (const id of LEVEL_ORDER) { const L = LEVEL_DEFS[id]; ok(`level ${id}: has paths, vantage above ground, paths at least 8 m`, L.paths.length > 0 && L.vantage[1] >= 1.7 && L.paths.every((q) => pathLen(q) >= 8)); } }
 console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);
 })();

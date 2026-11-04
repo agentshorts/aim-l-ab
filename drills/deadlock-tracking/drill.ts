@@ -6,32 +6,48 @@ import { MOVE } from "../../core/spec";
 import { PROFILES } from "./profile";
 import { DummyView } from "./dummy";
 import { getModel } from "../../core/models";
+import { LEVEL_DEFS, LevelDef, PathDef, buildLevel, pathPoint, pathLen, pathYaw, pathModes, aimAngles } from "./levels";
 const LEVELS: { modes: Mode[]; radius: number; bucket: "b1" | "b2" | "b3" }[] = [
   { modes: ["walk"], radius: 0.6, bucket: "b3" }, { modes: ["walk", "dash"], radius: 0.5, bucket: "b2" },
   { modes: ["walk", "dash", "slide", "air"], radius: 0.42, bucket: "b1" }, { modes: ["walk", "dash", "slide", "air", "zip"], radius: 0.36, bucket: "b1" } ];
-export function trackingDrill(): Drill {
-  let w: ReturnType<typeof makeWorld>, ctx: DrillCtx, mover: Mover, lvl = LEVELS[1]; let on = 0, tot = 0, best = 0, streak = 0;
-  const ray = new THREE.Raycaster(); const center = new THREE.Vector2(0, 0);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshLambertMaterial({ color: PAL.amber, emissive: 0x3a2200 }));
-  const hero = makeTrooper("enemy", "ranged"); hero.bar.visible = false; let dummy: DummyView | null = null;
-  const mk = () => { lvl = LEVELS[ctx.settings.difficulty] ?? LEVELS[1]; mover = new Mover(lvl.modes, (Math.random() * 1e9) | 0, PROFILES[ctx.settings.moveProfile] ?? PROFILES.classic); mover.dashPeak = MOVE.dash[lvl.bucket].peak; mover.dashDur = MOVE.dash[lvl.bucket].dur; };
+/** The original street lane, expressed as a level: player at the origin, one path 15 m out, zipline overhead. */
+const LANE: LevelDef = { id: "lane", title: "Tracking: movement tech", sub: "", vantage: [0, 1.7, 0], paths: [{ a: [-9, 0, -15], b: [9, 0, -15], zip: true }], props: [] };
+type Target = { path: PathDef; mover: Mover; head: THREE.Mesh; hero: ReturnType<typeof makeTrooper>; dummy: DummyView | null; sign: number };
+export function trackingDrill(levelId?: string): Drill {
+  const L = (levelId && LEVEL_DEFS[levelId]) || LANE; const isLane = L === LANE;
+  let w: ReturnType<typeof makeWorld>, ctx: DrillCtx, lvl = LEVELS[1]; let on = 0, tot = 0, best = 0, streak = 0;
+  const ray = new THREE.Raycaster(); const center = new THREE.Vector2(0, 0); let cover: THREE.Object3D[] = [];
+  const eye = new THREE.Vector3(...L.vantage); const T: Target[] = []; let live = 0, tSwitch = 0;
+  const nT = Math.max(1, L.targets ?? 1);
+  for (let i = 0; i < nT; i++) { const head = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshLambertMaterial({ color: PAL.amber, emissive: 0x3a2200 }));
+    const hero = makeTrooper("enemy", "ranged"); hero.bar.visible = false; T.push({ path: L.paths[i % L.paths.length], mover: null as any, head, hero, dummy: null, sign: 1 }); }
+  let mover: Mover; let head: THREE.Mesh;
+  const mk = () => { lvl = LEVELS[ctx.settings.difficulty] ?? LEVELS[1];
+    for (const t of T) { const m = new Mover(pathModes(t.path, lvl.modes), (Math.random() * 1e9) | 0, PROFILES[ctx.settings.moveProfile] ?? PROFILES.classic); m.dashPeak = MOVE.dash[lvl.bucket].peak; m.dashDur = MOVE.dash[lvl.bucket].dur;
+      m.lim = pathLen(t.path) / 2; if (!isLane) m.x = (Math.random() - 0.5) * m.lim; t.mover = m; }
+    live = 0; tSwitch = 0; mover = T[0].mover; head = T[0].head; };
   const drill: Drill = {
-    id: "deadlock-tracking", title: "Tracking: movement tech", primary: "on-target %",
+    id: isLane ? "deadlock-tracking" : `deadlock-tracking-${L.id}`, title: isLane ? L.title : `Tracking: ${L.title}`, primary: "on-target %",
     howTo: `<p>Keep the crosshair on the glowing head. The target moves with spec movement numbers:</p>
-<ul><li>walk 6.4 m/s, dash 635/579/562 u/s over 0.62/0.68/0.72 s by speed bucket</li><li>slide after dash (friction 0.1875), jump 295 u/s to 1.14 m, air strafe</li><li>zipline 18 m/s, drop keeps momentum</li></ul><p class=hint>Score is time on target as a percent. Harder levels add moves and shrink the head.</p>`,
+<ul><li>walk 6.4 m/s, dash 635/579/562 u/s over 0.62/0.68/0.72 s by speed bucket</li><li>slide after dash (friction 0.1875), jump 295 u/s to 1.14 m, air strafe</li><li>zipline 18 m/s, drop keeps momentum</li></ul><p class=hint>Score is time on target as a percent. Harder levels add moves and shrink the head.</p>${isLane ? "" : `<p>${L.sub}</p>`}`,
     hudLabels: ["on target %", "streak s", "best streak s", "mode"],
-    init(cx) { ctx = cx; w = makeWorld(cx.canvas, cx.settings.fov); cx.fx.cam = w.cam; w.scene.add(head, hero.g); zipline(w.scene, -15, 4.7, -9.5, 9.5, true);
-      dummy = DummyView.create(); if (dummy) { hero.g.visible = false; w.scene.add(dummy.g); }
-      for (const [n, x, z, ry] of [["building_guardhouse", -11, -26, 0.4], ["building_tower", 12, -30, -0.3]] as const) { const b = getModel(n); if (b) { b.obj.position.set(x, 0, z); b.obj.rotation.y = ry; w.scene.add(b.obj); } }
+    init(cx) { ctx = cx; w = makeWorld(cx.canvas, cx.settings.fov); cx.fx.cam = w.cam; w.cam.position.copy(eye);
+      for (const t of T) { w.scene.add(t.head, t.hero.g); t.dummy = DummyView.create(); if (t.dummy) { t.hero.g.visible = false; w.scene.add(t.dummy.g); } }
+      if (isLane) { zipline(w.scene, -15, 4.7, -9.5, 9.5, true);
+        for (const [n, x, z, ry] of [["building_guardhouse", -11, -26, 0.4], ["building_tower", 12, -30, -0.3]] as const) { const b = getModel(n); if (b) { b.obj.position.set(x, 0, z); b.obj.rotation.y = ry; w.scene.add(b.obj); } } }
+      else cover = buildLevel(w.scene, L);
       mk(); },
-    reset() { mk(); on = tot = best = streak = 0; ctx.input.yaw = 0; ctx.input.pitch = 0; },
+    reset() { mk(); on = tot = best = streak = 0; ctx.input.yaw = L.yaw0 ?? 0; ctx.input.pitch = L.pitch0 ?? 0; },
     setSettings() { w.setFov(ctx.settings.fov); }, resize() { w.resize(); },
     update(dt) {
-      if (dt <= 0) return; mover.step(dt);
-      head.scale.setScalar(lvl.radius); head.position.set(mover.x, mover.y + 1.7, -mover.z); hero.g.position.set(mover.x, mover.y, -mover.z);
-      if (dummy) { dummy.g.position.set(mover.x, mover.y, -mover.z); dummy.update(mover.mode, mover.vx, dt, mover.mode === "dash" ? mover.dashDur : mover.mode === "air" ? 2 * MOVE.jumpV / MOVE.gravity : undefined); }
+      if (dt <= 0) return;
+      if (T.length > 1 && (tSwitch += dt) >= (L.switchS ?? 4)) { tSwitch = 0; live = (live + 1) % T.length; mover = T[live].mover; head = T[live].head; }
+      T.forEach((t, i) => { const m = t.mover; m.step(dt); const p = pathPoint(t.path, m.x, m.y); if (Math.abs(m.vx) > 0.05) t.sign = Math.sign(m.vx);
+        t.head.scale.setScalar(i === live ? lvl.radius : lvl.radius * 0.8); t.head.position.set(p.x, p.y + 1.7, p.z); t.hero.g.position.copy(p);
+        if (t.dummy) { t.dummy.g.position.copy(p); t.dummy.update(m.mode, m.vx, dt, m.mode === "dash" ? m.dashDur : m.mode === "air" ? 2 * MOVE.jumpV / MOVE.gravity : undefined); t.dummy.g.rotation.y = pathYaw(t.path, t.sign); }
+        const mat = t.head.material as THREE.MeshLambertMaterial; if (i !== live) { mat.color.setHex(0x59626a); mat.emissive.setHex(0); } });
       w.cam.rotation.y = -ctx.input.yaw; w.cam.rotation.x = ctx.input.pitch; w.cam.updateMatrixWorld();
-      ray.setFromCamera(center, w.cam); const hit = ray.intersectObject(head).length > 0; tot += dt;
+      ray.setFromCamera(center, w.cam); const hits = ray.intersectObjects([head, ...cover], true); const hit = hits.length > 0 && hits[0].object === head; tot += dt;
       if (hit) { on += dt; const before = Math.floor(streak / 3); streak += dt; best = Math.max(best, streak); if (Math.floor(streak / 3) > before) { ctx.sfx.play("countdown", 0.6); ctx.fx.label(null, `${Math.floor(streak)} s streak`, "#e8a93c", "streakMeter"); } }
       else { if (streak > 1) ctx.fx.label(null, "lost target", "#9aa4a8", "missFeedback"); streak = 0; }
     },
@@ -41,6 +57,7 @@ export function trackingDrill(): Drill {
     hud() { return [(100 * on / Math.max(tot, 1e-6)).toFixed(1), streak.toFixed(1), best.toFixed(1), mover.mode]; },
     result() { const p = 100 * on / Math.max(tot, 1e-6); return { score: +p.toFixed(1), metrics: { onTargetPct: +p.toFixed(1), bestStreakS: +best.toFixed(2), seconds: +tot.toFixed(1), modeChanges: mover.log.length, illegalTransitions: mover.illegal } }; },
   };
-  drill.hooks = { get mover() { return mover; }, get dummy() { return dummy ? { clip: dummy.cur, face: dummy.face } : null; }, autoAim() { const m = mover; ctx.input.yaw = Math.atan2(m.x, m.z); ctx.input.pitch = Math.atan2(m.y, Math.hypot(m.x, m.z)); } };
+  drill.hooks = { level: L.id, get live() { return live; }, get mover() { return mover; }, get dummy() { const d = T[live].dummy; return d ? { clip: d.cur, face: d.face } : null; },
+    get headPos() { return head.position.toArray(); }, autoAim() { const a = aimAngles(eye, head.position); ctx.input.yaw = a.yaw; ctx.input.pitch = a.pitch; } };
   return drill;
 }
