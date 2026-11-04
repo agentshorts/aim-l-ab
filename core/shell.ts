@@ -41,6 +41,7 @@ export async function runDrill(root: HTMLElement, drill: Drill, store: Store, na
     if (p === "running" || p === "countdown") hide();
     if (p === "running" && wasCountdown) sfx.play("go"); wasCountdown = p === "countdown";
     if (p === "paused") show(h("div", { class: "panel" }, h("h2", {}, "Paused"), h("p", {}, "Click Resume to relock the mouse."), h("button", { class: "btn", onclick: () => input.lock() }, "Resume"), " ", h("button", { class: "btn ghost", onclick: () => { session.go("results"); } }, "End session")));
+    if (p !== "running") sfx.hum(0); // #57: the streak hum only plays while running
     if (p === "results") { input.unlock(); await finish(); }
     if (p === "idle") show(startCard());
   });
@@ -49,7 +50,7 @@ export async function runDrill(root: HTMLElement, drill: Drill, store: Store, na
     const metrics = { ...r.metrics, frameMeanMs: +f.mean.toFixed(2), frameP99Ms: +f.p99.toFixed(2), hitches: f.hitches, inputLatencyP50Ms: +pct(lat, 0.5).toFixed(2), inputLatencyP95Ms: +pct(lat, 0.95).toFixed(2) };
     const prev = await store.results(drill.id); const pb = bestOf(prev, settings.difficulty);
     const run: RunResult = { drill: drill.id, at: new Date().toISOString(), difficulty: settings.difficulty, score: +r.score.toFixed(2), metrics };
-    await store.addResult(run); const isPb = !pb || run.score > pb.score;
+    await store.addResult(run); const isPb = !pb || run.score > pb.score; sfx.play(isPb && pb ? "best" : "done"); // #57
     const chart = h("canvas", { style: "width:100%;height:130px" }) as HTMLCanvasElement;
     show(h("div", { class: "panel", id: "results" }, h("h2", {}, "Results"), h("div", { class: "big" }, String(run.score)), h("div", { class: isPb ? "pb" : "hint" }, isPb ? "New personal best" : `Personal best ${pb!.score}`), h("div", { class: "hint" }, `${drill.primary}, difficulty ${["Easy", "Normal", "Hard", "Pro"][settings.difficulty]}`),
       h("div", { class: "grid" }, ...Object.entries(metrics).map(([k, v]) => h("div", { class: "stat" }, h("b", {}, String(Number.isInteger(v) ? v : (+v).toFixed(1))), h("span", {}, k)))),
@@ -67,6 +68,6 @@ export async function runDrill(root: HTMLElement, drill: Drill, store: Store, na
     timer.textContent = session.phase === "countdown" ? String(Math.ceil(session.countdown)) : session.phase === "running" || session.phase === "paused" ? session.remaining().toFixed(1) : "";
     const v = drill.hud(); stats.forEach((s, i) => s.set(v[i] ?? ""));
   }, frame);
-  const api = { get weapon() { return wctx.weapon; }, fx, sfx, session, input, frame, drill, start, finish, reloadCrosshair(search?: string) { xh = loadCrosshair(search).cfg; drawX(); }, setCrosshair(c: CrosshairConfig) { xh = c; drawX(); }, get crosshair() { return xh; }, dispose() { stop(); input.unlock(); removeEventListener("resize", fit); removeEventListener("keydown", onKey); root.replaceChildren(); } };
+  const api = { get weapon() { return wctx.weapon; }, fx, sfx, session, input, frame, drill, start, finish, reloadCrosshair(search?: string) { xh = loadCrosshair(search).cfg; drawX(); }, setCrosshair(c: CrosshairConfig) { xh = c; drawX(); }, get crosshair() { return xh; }, dispose() { sfx.hum(0); stop(); input.unlock(); removeEventListener("resize", fit); removeEventListener("keydown", onKey); root.replaceChildren(); } };
   return api;
 }
