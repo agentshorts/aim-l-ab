@@ -66,3 +66,8 @@ addLevel({ id: "bridge", title: "Bridge over the lane", sub: "You stand on a bri
   props: [{ box: [30, 0.6, 3], p: [0, 5, 0], color: 0x6b4a2e }, { box: [30, 0.9, 0.15], p: [0, 5.9, -1.45], color: 0x9aa7a3 }, { box: [30, 0.9, 0.15], p: [0, 5.9, 1.45], color: 0x9aa7a3 },
     { box: [1, 4.4, 1], p: [-7, 4.4, 0] }, { box: [1, 4.4, 1], p: [7, 4.4, 0] },
     { model: "wall_straight", p: [-7, 0, -10], ry: Math.PI / 2 }, { model: "wall_straight", p: [7, 0, -16], ry: Math.PI / 2 }, { model: "building_guardhouse", p: [-11, 0, -24], ry: -0.4 }, { model: "building_tower", p: [10, 0, -30] }] });
+addLevel({ id: "elevated-targets", title: "Targets on high ground", sub: "Targets strafe along a rooftop ledge above you. Track upward and hold through the low cover on the ledge.",
+  vantage: [0, 1.7, -2], pitch0: 0.4,
+  paths: [{ a: [-10, 6, -16], b: [10, 6, -16] }],
+  props: [{ box: [24, 6, 5], p: [0, 6, -17], tiles: true }, { model: "wall_corner", p: [-6, 6, -14.6] }, { model: "wall_corner", p: [5, 6, -14.6], ry: -Math.PI / 2 },
+    { model: "wall_straight", p: [-5, 0, -7] }, { model: "building_tower", p: [14, 0, -16] }, { model: "building_guardhouse", p: [-15, 0, -14], ry: Math.PI / 2 }] });
