@@ -17,7 +17,7 @@ export function trackingDrill(): Drill {
     howTo: `<p>Keep the crosshair on the glowing head. The target moves with spec movement numbers:</p>
 <ul><li>walk 6.4 m/s, dash 635/579/562 u/s over 0.62/0.68/0.72 s by speed bucket</li><li>slide after dash (friction 0.1875), jump 295 u/s to 1.14 m, air strafe</li><li>zipline 18 m/s, drop keeps momentum</li></ul><p class=hint>Score is time on target as a percent. Harder levels add moves and shrink the head.</p>`,
     hudLabels: ["on target %", "streak s", "best streak s", "mode"],
-    init(cx) { ctx = cx; w = makeWorld(cx.canvas, cx.settings.fov); w.scene.add(head, hero.g); zipline(w.scene, -15, 4.7, -9.5, 9.5, true); mk(); },
+    init(cx) { ctx = cx; w = makeWorld(cx.canvas, cx.settings.fov); cx.fx.cam = w.cam; w.scene.add(head, hero.g); zipline(w.scene, -15, 4.7, -9.5, 9.5, true); mk(); },
     reset() { mk(); on = tot = best = streak = 0; ctx.input.yaw = 0; ctx.input.pitch = 0; },
     setSettings() { w.setFov(ctx.settings.fov); }, resize() { w.resize(); },
     update(dt) {
@@ -25,9 +25,12 @@ export function trackingDrill(): Drill {
       head.scale.setScalar(lvl.radius); head.position.set(mover.x, mover.y + 1.7, -mover.z); hero.g.position.set(mover.x, mover.y, -mover.z);
       w.cam.rotation.y = -ctx.input.yaw; w.cam.rotation.x = ctx.input.pitch; w.cam.updateMatrixWorld();
       ray.setFromCamera(center, w.cam); const hit = ray.intersectObject(head).length > 0; tot += dt;
-      if (hit) { on += dt; streak += dt; best = Math.max(best, streak); } else streak = 0;
+      if (hit) { on += dt; const before = Math.floor(streak / 3); streak += dt; best = Math.max(best, streak); if (Math.floor(streak / 3) > before) { ctx.sfx.play("countdown", 0.6); ctx.fx.label(null, `${Math.floor(streak)} s streak`, "#e8a93c", "streakMeter"); } }
+      else { if (streak > 1) ctx.fx.label(null, "lost target", "#9aa4a8", "missFeedback"); streak = 0; }
     },
-    render() { w.cam.rotation.y = -ctx.input.yaw; w.cam.rotation.x = ctx.input.pitch; (head.material as THREE.MeshLambertMaterial).emissive.setHex(streak > 0 ? 0x664000 : 0x3a2200); w.renderer.render(w.scene, w.cam); },
+    render() { w.cam.rotation.y = -ctx.input.yaw; w.cam.rotation.x = ctx.input.pitch; const glow = ctx.settings.cues.trackingGlow; (head.material as THREE.MeshLambertMaterial).emissive.setHex(glow && streak > 0 ? 0xb07000 : 0x3a2200);
+      (head.material as THREE.MeshLambertMaterial).color.setHex(glow && streak > 0 ? 0xffd27a : PAL.amber);
+      ctx.fx.meter = ctx.settings.cues.streakMeter ? { frac: streak / 10, text: `streak ${streak.toFixed(1)} s (best ${best.toFixed(1)})` } : null; w.renderer.render(w.scene, w.cam); },
     hud() { return [(100 * on / Math.max(tot, 1e-6)).toFixed(1), streak.toFixed(1), best.toFixed(1), mover.mode]; },
     result() { const p = 100 * on / Math.max(tot, 1e-6); return { score: +p.toFixed(1), metrics: { onTargetPct: +p.toFixed(1), bestStreakS: +best.toFixed(2), seconds: +tot.toFixed(1), modeChanges: mover.log.length, illegalTransitions: mover.illegal } }; },
   };

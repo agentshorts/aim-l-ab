@@ -1,0 +1,145 @@
+{
+ "souls": {
+  "fxLog": [
+   "label:miss",
+   "marker:",
+   "text:DENIED +2",
+   "flash:",
+   "text:SECURED +2",
+   "text:LAST HIT",
+   "text:THEY DENIED -1"
+  ],
+  "sfx": {
+   "countdown": 3,
+   "go": 1,
+   "miss": 7,
+   "deny": 3,
+   "secure": 3,
+   "lasthit": 2,
+   "lost": 1
+  },
+  "frame": {
+   "n": 859,
+   "mean": 31.585797438882423,
+   "p50": 16.799999999999727,
+   "p99": 116.60000000000218,
+   "max": 166.70000000000073,
+   "sd": 21.37138934583591,
+   "hitches": 417,
+   "hz": 31.659799057945907
+  },
+  "result": {
+   "score": 13,
+   "metrics": {
+    "lastHits": 2,
+    "secures": 3,
+    "denies": 3,
+    "lostOrbs": 1,
+    "autoClaimed": 0,
+    "missedDenies": 0,
+    "earlyOrbShots": 0,
+    "misses": 7,
+    "orbErrMs": 49.6,
+    "lastHitErrMs": 57.3
+   }
+  },
+  "phase": "results",
+  "lock": "unlocked",
+  "latency": {
+   "n": 2184,
+   "p50": 9.6999999940399,
+   "p95": 48.100000000000364
+  }
+ },
+ "tracking": {
+  "fxLog": [
+   "label:3 s streak",
+   "label:6 s streak",
+   "label:9 s streak",
+   "label:12 s streak",
+   "label:15 s streak",
+   "label:18 s streak"
+  ],
+  "sfx": {
+   "countdown": 12,
+   "go": 2,
+   "miss": 7,
+   "deny": 3,
+   "secure": 3,
+   "lasthit": 2,
+   "lost": 1
+  },
+  "frame": {
+   "n": 844,
+   "mean": 31.554857819905216,
+   "p50": 33.19999999999709,
+   "p99": 99.90000000000146,
+   "max": 150,
+   "sd": 19.456506059936675,
+   "hitches": 198,
+   "hz": 31.69084157207601
+  },
+  "result": {
+   "score": 99.9,
+   "metrics": {
+    "onTargetPct": 99.9,
+    "bestStreakS": 19.98,
+    "seconds": 20,
+    "modeChanges": 22,
+    "illegalTransitions": 0
+   }
+  },
+  "phase": "results",
+  "lock": "unlocked",
+  "latency": {
+   "n": 2927,
+   "p50": -4.100000017882849,
+   "p95": 30.69999998807907
+  }
+ },
+ "hubHistory": [
+  [
+   "deadlock-souls",
+   13
+  ],
+  [
+   "deadlock-tracking",
+   99.9
+  ]
+ ],
+ "crosshair": {
+  "r": 255,
+  "g": 80,
+  "b": 40,
+  "gap": 2,
+  "width": 3,
+  "height": 12,
+  "pipOpacity": 1,
+  "dotOpacity": 1,
+  "dotOutlineOpacity": 1,
+  "pipBorder": true,
+  "staticGap": true
+ },
+ "sfxPlayed": {
+  "souls": {
+   "countdown": 3,
+   "go": 1,
+   "miss": 7,
+   "deny": 3,
+   "secure": 3,
+   "lasthit": 2,
+   "lost": 1
+  },
+  "tracking": {
+   "countdown": 12,
+   "go": 2,
+   "miss": 7,
+   "deny": 3,
+   "secure": 3,
+   "lasthit": 2,
+   "lost": 1
+  }
+ },
+ "done": true,
+ "errors": []
+}

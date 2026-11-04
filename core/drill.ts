@@ -1,7 +1,9 @@
 import { Settings } from "./settings";
 import { Input } from "./input";
 import { RunResult } from "./storage";
-export interface DrillCtx { canvas: HTMLCanvasElement; settings: Settings; input: Input; }
+import { Fx } from "./fx";
+import { AudioCore } from "./audio";
+export interface DrillCtx { canvas: HTMLCanvasElement; settings: Settings; input: Input; fx: Fx; sfx: AudioCore; }
 export interface Drill {
   id: string; title: string; howTo: string; primary: string; // label of primary score
   hudLabels: string[];

@@ -1,3 +1,5 @@
+import { SFX } from "../core/sfx_synth";
+import { normalize as norm2, CUE_KEYS as CK } from "../core/settings";
 import { SoulSim } from "../drills/deadlock-souls/sim";
 import { Mover } from "../drills/deadlock-tracking/mover";
 import { MOVE, TROOPER, ORB } from "../core/spec";
@@ -50,5 +52,13 @@ ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToC
   const mem2: any = {}; const st2 = new LocalStore({ getItem: (k) => mem2[k] ?? null, setItem: (k, v) => { mem2[k] = v; } }); const n = await st2.importAll(JSON.parse(JSON.stringify(ex))); const n2 = await st2.importAll(ex);
   ok("export/import roundtrip, dedupe on reimport", n === 1 && n2 === 0 && (await st2.results("x"))[0].score === 5);
   let threw = false; try { await st2.importAll({ foo: 1 }); } catch { threw = true; } ok("import rejects foreign JSON", threw); }
-console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);
 })();
+// ---- feedback cues and sfx (v4)
+{ const sr = 48000; for (const [k, f] of Object.entries(SFX)) { const s = f(sr); let peak = 0, nan = false; for (const v of s) { if (!Number.isFinite(v)) nan = true; peak = Math.max(peak, Math.abs(v)); }
+    ok(`sfx ${k}: finite, 0.05..1.6 s, peak 0.05..1.5`, !nan && s.length >= 0.05 * sr && s.length <= 1.6 * sr && peak > 0.05 && peak < 1.5, `len=${(s.length / sr).toFixed(2)}s peak=${peak.toFixed(2)}`); }
+  for (const e of ["hit", "lasthit", "secure", "deny", "miss", "countdown"]) ok(`sfx event mapped: ${e}`, typeof SFX[e] === "function");
+  const learn = norm2({}); ok("default preset learn, all cues on", learn.cuePreset === "learn" && CK.every((k) => learn.cues[k]));
+  const pro = norm2({ cuePreset: "pro", cues: { hitMarkers: true } }); ok("pro preset forces cues off", CK.every((k) => !pro.cues[k]));
+  const cu = norm2({ cuePreset: "custom", cues: { hitMarkers: false } }); ok("custom keeps per-cue toggles", !cu.cues.hitMarkers && cu.cues.orbCues);
+  ok("volume clamped, mute bool", norm2({ volume: 7, muted: 1 }).volume === 1 && norm2({ muted: 1 }).muted === true); }
+console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);
