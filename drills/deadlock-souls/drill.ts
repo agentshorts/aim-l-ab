@@ -5,7 +5,7 @@ import { Settings } from "../../core/settings";
 import { SoulSim, Orb } from "./sim";
 import { ORB } from "../../core/spec";
 const DIFF = [ { perSide: 2, variance: 0, react: 0.9 }, { perSide: 3, variance: 0.1, react: 0.45 }, { perSide: 4, variance: 0.2, react: 0.28 }, { perSide: 4, variance: 0.3, react: 0.17 } ];
-const DMG = 40; // drill weapon, see spec
+import { DMG, trooperFeedback } from "./feedback";
 export function soulsDrill(): Drill {
   let w: ReturnType<typeof makeWorld>, ctx: DrillCtx, sim: SoulSim; const ray = new THREE.Raycaster(); const center = new THREE.Vector2(0, 0);
   const tv = new Map<number, ReturnType<typeof makeTrooper>>(), ov = new Map<number, ReturnType<typeof makeOrb>>();
@@ -29,8 +29,8 @@ export function soulsDrill(): Drill {
       else { fx.label(at, r.res === "early" ? "EARLY: orb still dark" : "LATE: already claimed", "#9aa4a8", "missFeedback"); sfx.play("miss"); }
       return r.res; }
     for (const [id, v] of tv) if (hit.object === v.hit) { const t = sim.troopers.find((x) => x.id === id)!; const r = sim.shootTrooper(t); add(r.res); const at = new THREE.Vector3(t.x, 2.2, -t.z);
-      if (r.res === "lasthit") { lhErrs.push(r.errMs); fx.hitMarker(true); fx.number(at, "LAST HIT", AMBER); sfx.play("lasthit"); }
-      else if (r.res === "hit") { fx.hitMarker(false); fx.number(at, String(DMG)); sfx.play("hit"); }
+      if (r.res === "lasthit") lhErrs.push(r.errMs);
+      const fb = trooperFeedback(r.res); if (fb.marker) fx.hitMarker(fb.marker === "kill"); if (fb.number) fx.number(at, fb.number.text, fb.number.color); if (fb.sound) sfx.play(fb.sound);
       return r.res; }
     return "none";
   }
