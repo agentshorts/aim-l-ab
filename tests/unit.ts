@@ -1,4 +1,5 @@
 import { SFX } from "../core/sfx_synth";
+import { labelLayout, LABEL_LANES, LANE_PX, Item } from "../core/fx";
 import { normalize as norm2, CUE_KEYS as CK } from "../core/settings";
 import { SoulSim } from "../drills/deadlock-souls/sim";
 import { Mover } from "../drills/deadlock-tracking/mover";
@@ -61,4 +62,7 @@ ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToC
   const pro = norm2({ cuePreset: "pro", cues: { hitMarkers: true } }); ok("pro preset forces cues off", CK.every((k) => !pro.cues[k]));
   const cu = norm2({ cuePreset: "custom", cues: { hitMarkers: false } }); ok("custom keeps per-cue toggles", !cu.cues.hitMarkers && cu.cues.orbCues);
   ok("volume clamped, mute bool", norm2({ volume: 7, muted: 1 }).volume === 1 && norm2({ muted: 1 }).muted === true); }
+{ const L = (t0: number): Item => ({ kind: "label", t0, dur: 0.9, color: "#fff", text: "x" }); const its = [L(0), L(0.1), L(0.2), L(0.3)]; const m = labelLayout(its);
+  const ys = [...m.values()]; ok("center labels never share a lane", new Set(ys).size === ys.length && ys.every((a) => ys.every((b) => a === b || Math.abs(a - b) >= LANE_PX)), ys.join(","));
+  ok(`label lanes capped at ${LABEL_LANES}, oldest dropped, newest nearest center`, m.size === LABEL_LANES && !m.has(its[0]) && m.get(its[3]) === 60); }
 console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);
