@@ -1,21 +1,9 @@
-# Assets v3: original 3D asset pack v1
+# Asset pack v3 swap-in
 
-Source: in-house procedural Blender build (asset pack v1, build script and licence sheet in `assets/models/LICENSES_v1.md`). All items are original work: no third-party models or textures, no game assets or logos, no AI-generated art. CC0 sources: none.
+| File | Measured on the box (three.js Box3 and raycast) | Used in |
+|---|---|---|
+| target_dummy_v3.glb | slide clip lowest vertex Y 0.000 on every frame (v2 dropped through the floor); bind min Y 0.000 | all tracking levels (replaces v2, which is removed) |
+| bridge_deck_30m_v2.glb | X -1.60..1.60, Y 0..5.60, Z -15.05..15.05; deck top Y 5.01 | bridge level, ry 90 degrees so it spans X; vantage eye stays 6.7 |
+| ramp_17m_v1.glb | X -1.51..1.51, Z 0..17.01; surface Y 0.13 at Z 0.5, 2.25 at 8.5, 4.37 at 16.5 | multi-path level at the ramp path start, yaw atan2(4,-16), Z scaled 16.49/17 to the path run |
 
-| File (assets/models/) | Size | Tris | Licence | Used in |
-|---|---|---|---|---|
-| trooper_melee_v1.glb | 20 KB | 208 | original, owned by project | souls troopers (melee) |
-| trooper_ranged_v1.glb | 21 KB | 224 | original | souls troopers (ranged, medic), ally team re-tinted sapphire |
-| soul_orb_v1.glb | 27 KB | 292 | original | souls orbs (origin at base, centre 0.25 m up, offset in code) |
-| ground_tile_v1.glb | 18 KB | 216 | original | loaded, not placed yet |
-| wall_straight_v1.glb | 10 KB | 84 | original | loaded, not placed yet |
-| wall_corner_v1.glb | 6 KB | 48 | original | loaded, not placed yet |
-| building_guardhouse_v1.glb | 15 KB | 132 | original | tracking backdrop |
-| building_tower_v1.glb | 16 KB | 158 | original | tracking backdrop |
-| zipline_pylon_v1.glb | 25 KB | 296 | original | both drills, scaled so the 6.0 m anchor meets the cable height |
-| zipline_cable_10m_v1.glb | 11 KB | 128 | original | both drills, tiled and scaled along the run |
-| target_dummy_v2.glb | 86 KB | 280 | original rig and keyframed clips | tracking target (12 bones, idle/run/dash/slide/jump), replaces v1: clips start at 0, one-way dash, jump peak 1.14 m |
-
-Loading: `core/models.ts` loads from `<bundle dir>/assets/models/` with GLTFLoader, so the same build works from the repo and the WordPress theme folder. If a file fails to load, the code-built shapes are used.
-
-Dummy notes: root travel is stripped (X/Z always, Y also in jump), the mover drives position, and clips are re-based to t=0. Facing turns the clip's +Z toward the direction of travel.
+Both level props keep their previous code shapes as `fallback`, built only if the model fails to load. bridge_deck_30m_v1.glb was not used.

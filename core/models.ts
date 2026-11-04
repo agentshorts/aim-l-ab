@@ -3,10 +3,10 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as skClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 // Original asset pack v1 (specs/assets_v3.md). Loaded from <bundle dir>/assets/models/ so it works inside the WP theme folder.
 // Every caller keeps its code-built shapes as the fallback: get() returns null until (or unless) the file loaded.
-export const MODEL_NAMES = ["trooper_melee", "trooper_ranged", "soul_orb", "ground_tile", "wall_straight", "wall_corner", "building_guardhouse", "building_tower", "zipline_pylon", "zipline_cable_10m", "target_dummy"] as const;
+export const MODEL_NAMES = ["trooper_melee", "trooper_ranged", "soul_orb", "ground_tile", "wall_straight", "wall_corner", "building_guardhouse", "building_tower", "zipline_pylon", "zipline_cable_10m", "target_dummy", "bridge_deck_30m", "ramp_17m"] as const;
 export type ModelName = typeof MODEL_NAMES[number];
 /** File version per model (default v1). target_dummy v2: clips start at 0, one-way dash, jump peak matches the mover. */
-export const MODEL_VERSION: Partial<Record<ModelName, string>> = { target_dummy: "v2" };
+export const MODEL_VERSION: Partial<Record<ModelName, string>> = { target_dummy: "v3", bridge_deck_30m: "v2" };
 type Loaded = { scene: THREE.Group; animations: THREE.AnimationClip[] };
 const cache = new Map<ModelName, Loaded | null>(); let base = "./"; let all: Promise<void> | null = null;
 export const modelStatus = { loaded: [] as string[], failed: [] as string[] };
