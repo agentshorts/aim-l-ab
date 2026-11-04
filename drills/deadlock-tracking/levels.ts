@@ -55,3 +55,8 @@ function fallbackBox(n: ModelName): THREE.Mesh | null {
   const dims: Partial<Record<ModelName, V3>> = { wall_straight: [4.1, 2.23, 0.6], wall_corner: [2.1, 1.46, 2.1], building_guardhouse: [6.1, 4.8, 5.1], building_tower: [4, 8.9, 4], ground_tile: [4, 0.2, 4] };
   const s = dims[n]; if (!s) return null; const m = new THREE.Mesh(new THREE.BoxGeometry(...s), new THREE.MeshLambertMaterial({ color: n.startsWith("building") ? PAL.bldB : PAL.stripe })); m.userData.h = s[1]; return m;
 }
+addLevel({ id: "high-ground", title: "High ground", sub: "You hold a raised platform. Targets strafe on the street below; keep your crosshair low and follow them past the cover.",
+  vantage: [0, 9.7, 0], pitch0: -0.5,
+  paths: [{ a: [-11, 0, -14], b: [11, 0, -14] }],
+  props: [{ box: [8, 8, 6], p: [0, 8, 2], tiles: true, color: 0x2f2a24 }, { model: "wall_corner", p: [-3.2, 8, -0.2], ry: Math.PI }, { model: "wall_corner", p: [3.2, 8, -0.2], ry: -Math.PI / 2 },
+    { model: "wall_straight", p: [4, 0, -9] }, { model: "building_guardhouse", p: [-8, 0, -22], ry: 0.3 }, { model: "building_tower", p: [12, 0, -24] }] });

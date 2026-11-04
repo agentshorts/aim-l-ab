@@ -13,3 +13,4 @@ Routes are `#/tracking/<id>`, results are stored as `deadlock-tracking-<id>`, an
 
 | id | Title | Vantage | Targets |
 |---|---|---|---|
+| high-ground | High ground | platform edge, eye 9.7 m | ground strafe 14 m out, 22 m wide; wall and guardhouse as cover |
