@@ -1,0 +1,59 @@
+PASS trooper HP drop per tick = 35 dps * 0.5 s = 17.5 hp=282.5
+PASS ranged 300 hp dies at 9.0 s (18 ticks) t=9.000
+PASS orb spawns on death, floating share 50 of 100 
+PASS wave phase cleared, respawns after delay 
+PASS new wave spawned 
+PASS opponent cannot deny before light-up + 80 ms grace at 230 ms
+PASS unclaimed orb pops at 1.0 s to owner (not counted lost) 1000 ms
+PASS last hit at window open: error ~0 ms err=0.00 ms
+PASS orb shot while dark = early 
+PASS orb shot at light-up = secure, err ~0 err=0.10 ms
+PASS claimed orb cannot be claimed twice 
+PASS dash peak = 635 u/s = 16.13 m/s peak=16.10
+PASS dash duration 0.62 s t=0.620 dist=5.97 m (EST)
+PASS jump apex = 45 u = 1.143 m apex=1.139
+PASS zipline 18 m/s v=18
+PASS zip ends by dropping (air) then landing, no teleport zip>air>walk
+PASS illegal transition walk>slide rejected 
+PASS 60k random steps: no illegal transitions, stays in bounds changes=528
+PASS gravity derived 24.56 m/s^2 24.560
+PASS deadlock sens 1 @ 800 dpi = 25.98 cm/360 25.977
+PASS cm360 <-> deadlock sens roundtrip 
+PASS 35 cm of counts at 800 dpi = exactly 2*pi 
+PASS defaults when nothing set 
+PASS localStorage used when no ?ch 
+PASS ?ch wins over localStorage, 11 values in order, booleans 0/1 
+PASS bad ?ch (wrong count) falls back 
+PASS share roundtrip 0,245,255,-3,4,10,1,0,0,0,1
+PASS pip offset matches site: max(0, h/2+gap); defaults -> 2 px 2
+PASS cannot run from idle 
+PASS countdown 3 s then exactly 2 s of sim time sim=2.000
+PASS sfx hit: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.18s peak=0.64
+PASS sfx lasthit: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.50s peak=1.21
+PASS sfx kill: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.40s peak=0.67
+PASS sfx secure: finite, 0.05..1.6 s, peak 0.05..1.5 len=1.20s peak=1.00
+PASS sfx deny: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.45s peak=1.18
+PASS sfx lost: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.35s peak=0.50
+PASS sfx miss: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.16s peak=0.36
+PASS sfx countdown: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.25s peak=0.55
+PASS sfx go: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.40s peak=0.69
+PASS sfx event mapped: hit 
+PASS sfx event mapped: lasthit 
+PASS sfx event mapped: secure 
+PASS sfx event mapped: deny 
+PASS sfx event mapped: miss 
+PASS sfx event mapped: countdown 
+PASS default preset learn, all cues on 
+PASS pro preset forces cues off 
+PASS custom keeps per-cue toggles 
+PASS volume clamped, mute bool 
+PASS body hit on full-HP trooper: result hit, hp -40 res=hit dhp=40
+PASS body hit feedback: hit sound, damage number 40, small marker 
+PASS last hit feedback: lasthit sound, kill marker 
+PASS center labels never share a lane 60,84,108
+PASS label lanes capped at 3, oldest dropped, newest nearest center 
+PASS realistic reversal sampler hits study median 0.833 s 
+PASS realistic profile reversal rate consistent with study intervals (median 0.83 s, EST): 25..90 per min 52.3/min
+PASS realistic profile only uses legal transitions 
+PASS settings default classic, accepts realistic 
+ALL PASS
