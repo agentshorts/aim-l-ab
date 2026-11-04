@@ -24,6 +24,9 @@ const p1 = (async () => {
   for (let i = 0; i < 2000 && e.alive; i++) s.step(0.01); ok("ranged 300 hp dies at 9.0 s (18 ticks)", near(s.t, 9.0, 0.011), `t=${s.t.toFixed(3)}`);
   ok("orb spawns on death, floating share 50 of 100", s.orbs.some((o) => o.owner === "ally") && TROOPER.bounty0 * TROOPER.floatingShare === 50);
   ok("wave phase cleared, respawns after delay", s.wave === "cleared"); for (let i = 0; i < 200; i++) s.step(0.01); ok("new wave spawned", s.wave === "fighting" && s.waves === 2); }
+{ const s = new SoulSim({ perSide: 4, variance: 0, playerDamage: 40, oppReact: 0.3, seed: 5 }); for (const t of s.living("enemy")) s.kill(t, "trooper"); const ally = s.living("ally").map((t) => t.id);
+  s.step(0.05); for (let i = 0; i < 200; i++) s.step(0.01);
+  ok("clearing the enemy side keeps ally survivors into the next wave (#35)", s.waves === 2 && ally.every((id) => s.troopers.some((t) => t.id === id && t.alive)) && s.living("enemy").length === 4, `allies ${s.living("ally").length}`); }
 { const s = new SoulSim({ perSide: 1, variance: 0, playerDamage: 40, oppReact: 0, seed: 1 });
   while (!s.orbs.length) s.step(0.001); const born = s.orbs[0].born; while (s.orbs.some((o) => o.owner === "ally" && o.state !== "claimed")) s.step(0.001);
   const d = s.events.find((e) => e.type === "oppDeny"); ok("opponent cannot deny before light-up + 80 ms grace", !!d && d.t - born >= ORB.lightUp + ORB.grace - 1e-6, `at ${((d!.t - born) * 1000).toFixed(0)} ms`); }
