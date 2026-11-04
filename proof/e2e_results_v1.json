@@ -1,0 +1,29 @@
+{
+ "deadlock-souls": {
+  "frame": {
+   "n": 825,
+   "mean": 17.070060606060718,
+   "p99": 16.800000000000182,
+   "max": 300
+  },
+  "score": {
+   "lasthit": 2,
+   "lasthitErr": 160.00000001192927,
+   "secure": 3,
+   "deny": 3,
+   "invalid": 5,
+   "meanOrbErrMs": 36.666666670636566
+  },
+  "errors": []
+ },
+ "deadlock-tracking": {
+  "frame": {
+   "n": 573,
+   "mean": 16.665968586387404,
+   "p99": 16.800000000000182,
+   "max": 16.80000000000109
+  },
+  "onTargetPct": 0,
+  "errors": []
+ }
+}
