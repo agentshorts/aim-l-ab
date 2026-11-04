@@ -71,3 +71,8 @@ addLevel({ id: "elevated-targets", title: "Targets on high ground", sub: "Target
   paths: [{ a: [-10, 6, -16], b: [10, 6, -16] }],
   props: [{ box: [24, 6, 5], p: [0, 6, -17], tiles: true }, { model: "wall_corner", p: [-6, 6, -14.6] }, { model: "wall_corner", p: [5, 6, -14.6], ry: -Math.PI / 2 },
     { model: "wall_straight", p: [-5, 0, -7] }, { model: "building_tower", p: [14, 0, -16] }, { model: "building_guardhouse", p: [-15, 0, -14], ry: Math.PI / 2 }] });
+addLevel({ id: "multi-path", title: "Multi-path", sub: "Three targets on three paths: across, away from you, and up a ramp. Only the lit head counts, and it moves to another target every 4 s.",
+  vantage: [0, 1.7, 0], targets: 3, switchS: 4,
+  paths: [{ a: [-10, 0, -13], b: [10, 0, -13] }, { a: [7, 0, -8], b: [11, 0, -26] }, { a: [-9, 0, -9], b: [-5, 4.5, -25] }],
+  props: [{ box: [2.5, 0.4, 17.2], p: [-7, 2.25, -17], ry: Math.atan2(4, -16), tilt: -Math.atan2(4.5, 16.5), color: 0x6b4a2e }, { box: [5, 4.5, 5], p: [-5, 4.5, -27.5], tiles: true },
+    { model: "wall_straight", p: [4, 0, -18] }, { model: "building_guardhouse", p: [0, 0, -24] }, { model: "building_tower", p: [15, 0, -30] }] });
