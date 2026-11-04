@@ -1,4 +1,5 @@
 import { SFX } from "../core/sfx_synth";
+import { PROFILES, sampleQ } from "../drills/deadlock-tracking/profile";
 import { trooperFeedback, DMG as SOUL_DMG } from "../drills/deadlock-souls/feedback";
 import { labelLayout, LABEL_LANES, LANE_PX, Item } from "../core/fx";
 import { normalize as norm2, CUE_KEYS as CK } from "../core/settings";
@@ -71,4 +72,10 @@ ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToC
 { const L = (t0: number): Item => ({ kind: "label", t0, dur: 0.9, color: "#fff", text: "x" }); const its = [L(0), L(0.1), L(0.2), L(0.3)]; const m = labelLayout(its);
   const ys = [...m.values()]; ok("center labels never share a lane", new Set(ys).size === ys.length && ys.every((a) => ys.every((b) => a === b || Math.abs(a - b) >= LANE_PX)), ys.join(","));
   ok(`label lanes capped at ${LABEL_LANES}, oldest dropped, newest nearest center`, m.size === LABEL_LANES && !m.has(its[0]) && m.get(its[3]) === 60); }
+{ const q = PROFILES.realistic.reversalQ!; ok("realistic reversal sampler hits study median 0.833 s", near(sampleQ(q, 0.5), 0.833, 1e-9) && sampleQ(q, 0) === 0.15 && sampleQ(q, 1) === 2.5);
+  const m = new Mover(["walk", "dash", "slide", "air", "zip"], 11, PROFILES.realistic); let flips = 0, lastDir = m.dir; const dt = 1 / 240;
+  for (let i = 0; i < 240 * 600; i++) { m.step(dt); if (m.dir !== lastDir) { flips++; lastDir = m.dir; } }
+  const perMin = flips / 10; ok("realistic profile reversal rate consistent with study intervals (median 0.83 s, EST): 25..90 per min", perMin > 25 && perMin < 90, `${perMin.toFixed(1)}/min`);
+  ok("realistic profile only uses legal transitions", m.illegal === 0);
+  ok("settings default classic, accepts realistic", norm2({}).moveProfile === "classic" && norm2({ moveProfile: "realistic" }).moveProfile === "realistic" && norm2({ moveProfile: "x" }).moveProfile === "classic"); }
 console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);

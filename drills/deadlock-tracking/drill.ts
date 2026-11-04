@@ -3,6 +3,7 @@ import { Drill, DrillCtx } from "../../core/drill";
 import { makeWorld, makeTrooper, zipline, PAL } from "../../core/scene3d";
 import { Mover, Mode } from "./mover";
 import { MOVE } from "../../core/spec";
+import { PROFILES } from "./profile";
 const LEVELS: { modes: Mode[]; radius: number; bucket: "b1" | "b2" | "b3" }[] = [
   { modes: ["walk"], radius: 0.6, bucket: "b3" }, { modes: ["walk", "dash"], radius: 0.5, bucket: "b2" },
   { modes: ["walk", "dash", "slide", "air"], radius: 0.42, bucket: "b1" }, { modes: ["walk", "dash", "slide", "air", "zip"], radius: 0.36, bucket: "b1" } ];
@@ -11,7 +12,7 @@ export function trackingDrill(): Drill {
   const ray = new THREE.Raycaster(); const center = new THREE.Vector2(0, 0);
   const head = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshLambertMaterial({ color: PAL.amber, emissive: 0x3a2200 }));
   const hero = makeTrooper("enemy", "ranged"); hero.bar.visible = false;
-  const mk = () => { lvl = LEVELS[ctx.settings.difficulty] ?? LEVELS[1]; mover = new Mover(lvl.modes, (Math.random() * 1e9) | 0); mover.dashPeak = MOVE.dash[lvl.bucket].peak; mover.dashDur = MOVE.dash[lvl.bucket].dur; };
+  const mk = () => { lvl = LEVELS[ctx.settings.difficulty] ?? LEVELS[1]; mover = new Mover(lvl.modes, (Math.random() * 1e9) | 0, PROFILES[ctx.settings.moveProfile] ?? PROFILES.classic); mover.dashPeak = MOVE.dash[lvl.bucket].peak; mover.dashDur = MOVE.dash[lvl.bucket].dur; };
   const drill: Drill = {
     id: "deadlock-tracking", title: "Tracking: movement tech", primary: "on-target %",
     howTo: `<p>Keep the crosshair on the glowing head. The target moves with spec movement numbers:</p>
