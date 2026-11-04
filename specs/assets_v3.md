@@ -14,7 +14,7 @@ Source: in-house procedural Blender build (asset pack v1, build script and licen
 | building_tower_v1.glb | 16 KB | 158 | original | tracking backdrop |
 | zipline_pylon_v1.glb | 25 KB | 296 | original | both drills, scaled so the 6.0 m anchor meets the cable height |
 | zipline_cable_10m_v1.glb | 11 KB | 128 | original | both drills, tiled and scaled along the run |
-| target_dummy_v1.glb | 89 KB | 280 | original rig and keyframed clips | tracking target (12 bones, idle/run/dash/slide/jump) |
+| target_dummy_v2.glb | 86 KB | 280 | original rig and keyframed clips | tracking target (12 bones, idle/run/dash/slide/jump), replaces v1: clips start at 0, one-way dash, jump peak 1.14 m |
 
 Loading: `core/models.ts` loads from `<bundle dir>/assets/models/` with GLTFLoader, so the same build works from the repo and the WordPress theme folder. If a file fails to load, the code-built shapes are used.
 
