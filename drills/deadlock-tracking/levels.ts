@@ -60,3 +60,9 @@ addLevel({ id: "high-ground", title: "High ground", sub: "You hold a raised plat
   paths: [{ a: [-11, 0, -14], b: [11, 0, -14] }],
   props: [{ box: [8, 8, 6], p: [0, 8, 2], tiles: true, color: 0x2f2a24 }, { model: "wall_corner", p: [-3.2, 8, -0.2], ry: Math.PI }, { model: "wall_corner", p: [3.2, 8, -0.2], ry: -Math.PI / 2 },
     { model: "wall_straight", p: [4, 0, -9] }, { model: "building_guardhouse", p: [-8, 0, -22], ry: 0.3 }, { model: "building_tower", p: [12, 0, -24] }] });
+addLevel({ id: "bridge", title: "Bridge over the lane", sub: "You stand on a bridge. Targets run up the lane toward the bridge; follow them down as they close in below you.",
+  vantage: [0, 6.7, 0], pitch0: -0.3,
+  paths: [{ a: [-3, 0, -26], b: [1, 0, -3] }],
+  props: [{ box: [30, 0.6, 3], p: [0, 5, 0], color: 0x6b4a2e }, { box: [30, 0.9, 0.15], p: [0, 5.9, -1.45], color: 0x9aa7a3 }, { box: [30, 0.9, 0.15], p: [0, 5.9, 1.45], color: 0x9aa7a3 },
+    { box: [1, 4.4, 1], p: [-7, 4.4, 0] }, { box: [1, 4.4, 1], p: [7, 4.4, 0] },
+    { model: "wall_straight", p: [-7, 0, -10], ry: Math.PI / 2 }, { model: "wall_straight", p: [7, 0, -16], ry: Math.PI / 2 }, { model: "building_guardhouse", p: [-11, 0, -24], ry: -0.4 }, { model: "building_tower", p: [10, 0, -30] }] });

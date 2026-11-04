@@ -14,3 +14,4 @@ Routes are `#/tracking/<id>`, results are stored as `deadlock-tracking-<id>`, an
 | id | Title | Vantage | Targets |
 |---|---|---|---|
 | high-ground | High ground | platform edge, eye 9.7 m | ground strafe 14 m out, 22 m wide; wall and guardhouse as cover |
+| bridge | Bridge over the lane | bridge deck, eye 6.7 m | lane run 23 m from 26 m out to just short of the deck (steep look-down at the near end); rails cut line of sight |
