@@ -1,0 +1,72 @@
+{
+ "souls/lane-plaza": {
+  "layout": "lane-plaza",
+  "shots": {
+   "invalid": 21,
+   "miss": 4,
+   "deny": 2,
+   "secure": 2,
+   "lasthit": 1
+  }
+ },
+ "tracking/lane-plaza": {
+  "bumps": 0,
+  "knockoffs": 2,
+  "zipRides": 4,
+  "illegal": 0,
+  "insideNow": 0
+ },
+ "souls/lane-overpass": {
+  "layout": "lane-overpass",
+  "shots": {
+   "miss": 11,
+   "lasthit": 3,
+   "secure": 3,
+   "deny": 1
+  }
+ },
+ "tracking/lane-overpass": {
+  "bumps": 0,
+  "knockoffs": 2,
+  "zipRides": 5,
+  "illegal": 0,
+  "insideNow": 0
+ },
+ "souls/lane-terrace": {
+  "layout": "lane-terrace",
+  "shots": {
+   "hit": 1,
+   "lasthit": 1,
+   "miss": 4,
+   "deny": 2,
+   "secure": 2
+  }
+ },
+ "tracking/lane-terrace": {
+  "bumps": 0,
+  "knockoffs": 1,
+  "zipRides": 3,
+  "illegal": 0,
+  "insideNow": 0
+ },
+ "laneZip": {
+  "knockoffs": 6,
+  "zipRides": 6,
+  "illegal": 0,
+  "log": [
+   "zip",
+   "air",
+   "walk",
+   "air",
+   "walk",
+   "zip",
+   "air",
+   "walk"
+  ]
+ },
+ "multiPath": {
+  "bumps": 14,
+  "framesInsideSolid": 0
+ },
+ "errors": []
+}

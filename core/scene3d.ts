@@ -2,20 +2,24 @@ import * as THREE from "three";
 import { getModel, tint as tintModel } from "./models";
 // Original stylized lane: dusk city street, lane stripes, low buildings, zipline cables. Uses the original asset pack when loaded (core/models.ts), code shapes otherwise.
 export const PAL = { bg: 0x10171a, fog: 0x1a2428, ground: 0x2a3236, stripe: 0x3d4a4f, bldA: 0x23302f, bldB: 0x2f2a24, win: 0xe8a93c, cable: 0x9aa7a3, amber: 0xe8a93c, amberGlow: 0xffcf7a, sapphire: 0x5b8fd6, sapphireGlow: 0xa8ccff, wood: 0x6b4a2e, cloth: 0x3b3f44 };
+/** #56: material for a surface laid on another (stripes, windows, glow strips): pulled toward the camera in depth so it never z-fights. */
+export function decalMat<M extends THREE.Material>(m: M): M { m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -4; return m; }
 export function makeWorld(canvas: HTMLCanvasElement, fovH: number) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+  renderer.setPixelRatio(Math.min(3, devicePixelRatio || 1)); /* #56 wiggle: full device pixel ratio (cap 3) so thin strips get enough samples */
   const scene = new THREE.Scene(); scene.background = new THREE.Color(PAL.bg); scene.fog = new THREE.Fog(PAL.fog, 25, 90);
-  const cam = new THREE.PerspectiveCamera(70, 1, 0.05, 300); cam.position.set(0, 1.7, 0); cam.rotation.order = "YXZ";
+  const cam = new THREE.PerspectiveCamera(70, 1, 0.1, 200) /* #56: tighter near/far for depth precision */; cam.position.set(0, 1.7, 0); cam.rotation.order = "YXZ";
   scene.add(new THREE.HemisphereLight(0xcfd8e0, 0x2a2018, 1.6)); const sun = new THREE.DirectionalLight(0xffe0b0, 1.4); sun.position.set(-10, 20, -5); scene.add(sun);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 200), new THREE.MeshLambertMaterial({ color: PAL.ground })); ground.rotation.x = -Math.PI / 2; ground.position.z = -60; scene.add(ground);
-  const stripeM = new THREE.MeshBasicMaterial({ color: PAL.stripe });
-  for (let z = -2; z > -120; z -= 6) for (const x of [-6, 6]) { const s = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 3), stripeM); s.rotation.x = -Math.PI / 2; s.position.set(x, 0.01, z); scene.add(s); }
-  const winM = new THREE.MeshBasicMaterial({ color: PAL.win });
+  /* #56 wiggle: stripes were 0.25 m wide at 0.01 m over the ground (z-fight + sub-pixel aliasing at range). Now 0.4 m wide,
+     lifted 0.03 m, pulled forward with polygonOffset and drawn after the ground. */
+  const stripeM = decalMat(new THREE.MeshBasicMaterial({ color: PAL.stripe }));
+  for (let z = -2; z > -120; z -= 6) for (const x of [-6, 6]) { const s = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 3), stripeM); s.rotation.x = -Math.PI / 2; s.position.set(x, 0.03, z); s.renderOrder = 1; scene.add(s); }
+  const winM = decalMat(new THREE.MeshBasicMaterial({ color: PAL.win }));
   for (let i = 0; i < 16; i++) for (const side of [-1, 1]) {
     const h = 6 + ((i * 7 + (side + 1) * 3) % 9), w = 7, d = 9; const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color: i % 2 ? PAL.bldA : PAL.bldB }));
     b.position.set(side * 15, h / 2, -i * 10 + 4); scene.add(b);
-    for (let k = 0; k < 3; k++) if ((i + k) % 2 === 0) { const wn = new THREE.Mesh(new THREE.PlaneGeometry(1, 1.4), winM); wn.position.set(side * (15 - w / 2 - 0.01), 2.5 + k * 2.2, -i * 10 + 4 + (k - 1) * 2.5); wn.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; scene.add(wn); }
+    for (let k = 0; k < 3; k++) if ((i + k) % 2 === 0) { const wn = new THREE.Mesh(new THREE.PlaneGeometry(1, 1.4), winM); wn.position.set(side * (15 - w / 2 - 0.03), 2.5 + k * 2.2, -i * 10 + 4 + (k - 1) * 2.5); wn.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; scene.add(wn); }
   }
   const resize = () => { const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight; renderer.setSize(w, h, false); cam.aspect = w / h;
     cam.fov = (2 * Math.atan(Math.tan((fovH * Math.PI) / 360) / cam.aspect) * 180) / Math.PI; cam.updateProjectionMatrix(); };

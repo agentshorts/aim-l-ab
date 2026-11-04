@@ -2,9 +2,9 @@ import * as THREE from "three";
 import { SFX } from "../core/sfx_synth";
 import { readFileSync } from "fs";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { LEVEL_DEFS, LEVEL_ORDER, pathPoint, pathLen, pathYaw, pathModes, aimAngles } from "../drills/deadlock-tracking/levels";
+import { LEVEL_DEFS, LEVEL_ORDER, pathPoint, pathLen, pathYaw, pathModes, aimAngles, levelSolids, blocked, freePoint, pathCables, unstick } from "../drills/deadlock-tracking/levels";
 import { HERO_WEAPONS, heroWeapon, Weapon } from "../core/heroes";
-import { MODEL_NAMES, MODEL_VERSION, stripRootMotion } from "../core/models";
+import { MODEL_NAMES, MODEL_VERSION, stripRootMotion, fixStrips } from "../core/models";
 import { clipFor, facingFor } from "../drills/deadlock-tracking/dummy";
 import { PROFILES, sampleQ } from "../drills/deadlock-tracking/profile";
 import { trooperFeedback, DMG as SOUL_DMG } from "../drills/deadlock-souls/feedback";
@@ -145,5 +145,37 @@ ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToC
     for (const e of g.exposed()) { if (!e.dashing && Math.abs(e.vx * (e.toZ - e.z) - e.vz * (e.toX - e.x)) / (Math.hypot(e.toX - e.x, e.toZ - e.z) || 1) > 2) lat++; if (!e.dashing && e.back > 0) back++; } }
   jumps = g.enemies.reduce((a, e) => a + e.jumps, 0) + g.kills;
   ok("cover fire free movement: enemies strafe sideways, step back and jump between covers, inside the arena", lat > 50 && back > 10 && g.enemies.every((e) => Math.abs(e.x) <= 10), `strafe frames ${lat}, back frames ${back}`); }
+
+// ---- #52 collision, #53 zipline knock-off, #54 lane layouts, #56 thin-line wiggle ----
+{ const L = LEVEL_DEFS["multi-path"], S = levelSolids(L), ramp = L.paths[2];
+  ok("#52 the across path walker can no longer stand inside the ramp (the clip in the issue)", blocked(S, -8.2, 0, -13));
+  let onRamp = 0; for (let u = -7; u <= 7; u += 0.5) if (!blocked(S, freePoint(ramp, u, 0, 0).x, freePoint(ramp, u, 0, 0).y, freePoint(ramp, u, 0, 0).z)) onRamp++;
+  ok("#52 the ramp walker stands on the ramp surface (not blocked by it)", onRamp === 29, `${onRamp}/29`);
+  const br = levelSolids(LEVEL_DEFS["bridge"]); ok("#52 bridge: on the deck is clear, inside a pillar or the deck slab is blocked", !blocked(br, 0, 5, 0) && blocked(br, 7, 0, 0) && blocked(br, 0, 4.5, 0));
+  let inside = 0, frames = 0, moved = 0; const where = new Set<string>();
+  for (const id of LEVEL_ORDER) { const LL = LEVEL_DEFS[id], SS = levelSolids(LL);
+    for (const p of LL.paths) { const lim = pathLen(p) / 2, lat = p.lat ?? 2.5; const m = new FreeMover(["walk", "dash", "slide", "air", "zip"], { u0: -lim, u1: lim, v0: -lat, v1: lat }, FREE_RATES[3], 77); m.cables = pathCables(p, LL.zips ?? []);
+      const inS = () => { if (m.mode === "zip") return false; const q = freePoint(p, m.u, m.v, m.y); return blocked(SS, q.x, q.y, q.z); };
+      for (let k = 0; k < 40 && inS(); k++) { m.u = (k / 40 - 0.5) * 2 * lim; m.v = ((k * 7) % 11 / 11 - 0.5) * 2 * lat; }
+      const u0 = m.u; for (let i = 0; i < 60 * 60; i++) { const pu = m.u, pv = m.v; m.step(1 / 60); if (inS()) { m.u = pu; m.v = pv; m.vu = m.vv = 0; m.heading(); if (m.mode === "dash" || m.mode === "slide") m.set("walk"); unstick(m, inS); } frames++; if (inS()) { inside++; where.add(id); } if (Math.abs(m.u - u0) > 2) moved++; } } }
+  ok("#52 every level: 1 min of Pro free movement per path never ends a frame inside a solid, and targets still move", inside === 0 && moved > frames * 0.3, `inside ${inside}/${frames} ${[...where]}, moved ${moved}`); }
+{ const LL = LEVEL_DEFS["lane-plaza"], p = LL.paths[0], c = pathCables(p, LL.zips!); const m = new FreeMover(["walk", "zip"], { u0: -9, u1: 9, v0: -4.5, v1: 4.5 }, { turn: 0.5, dash: 0, jump: 0, zip: 3 }, 3); m.cables = c;
+  let rode = 0, xs: number[] = [], knocked = false, fellTo = -1, walked = false;
+  for (let i = 0; i < 60 * 30 && !walked; i++) { m.step(1 / 60); if (m.mode === "zip") { rode++; const q = freePoint(p, m.u, m.v, m.y); xs.push(q.x, q.y); if (rode === 10) { knocked = m.knock(); } }
+    if (knocked && m.mode === "air") fellTo = m.y; if (knocked && m.mode === "walk") walked = true; }
+  ok("#53 zipline runs along the lane: a rider hangs under the cable (x -2.5, feet 3.5 m)", xs.length > 0 && xs.every((v, i) => i % 2 ? Math.abs(v - 3.5) < 1e-6 : Math.abs(v + 2.5) < 1e-6), `${xs.slice(0, 2)}`);
+  ok("#53 a hit on the cable knocks the rider off: falls with no jump boost, lands, walks again", knocked && walked && m.knocks === 1 && m.illegal === 0 && fellTo < 3.5 && m.log.some((e, i) => e.mode === "air" && m.log[i - 1]?.mode === "zip"), `knocked ${knocked} walked ${walked} knocks ${m.knocks} illegal ${m.illegal} fell ${fellTo.toFixed(2)} rode ${rode}`);
+  const far = new FreeMover(["walk", "zip"], { u0: -9, u1: 9, v0: -4.5, v1: 4.5 }, { turn: 0, dash: 0, jump: 0, zip: 50 }, 3); far.cables = c; far.v = 4.5; far.hu = 0; far.hv = 0; for (let i = 0; i < 30; i++) far.step(1 / 60);
+  ok("#53 a walker far from the cable cannot mount it", far.log.every((e) => e.mode !== "zip")); }
+{ const lanes = LEVEL_ORDER.filter((id) => LEVEL_DEFS[id].souls); ok("#54 at least three lane layouts with a souls vantage and ziplines along the lane", lanes.length >= 3 && lanes.every((id) => (LEVEL_DEFS[id].zips ?? []).length > 0 && LEVEL_DEFS[id].zips!.every((z) => z.a[0] === z.b[0])), lanes.join());
+  let bad: string[] = []; for (const id of lanes) { const L = LEVEL_DEFS[id], S = levelSolids(L), e = new THREE.Vector3(...L.souls!.vantage);
+    for (let z = 13; z <= 19; z += 1) for (let x = -3.6; x <= 4.6; x += 0.9) { if (blocked(S, x, 0, -z, 0.1)) bad.push(`${id} trooper ${x},${z}`);
+      const t = new THREE.Vector3(x, 1.4, -z); for (let k = 0.05; k < 0.97; k += 0.03) { const q = e.clone().lerp(t, k); for (const s of S) { const dx = q.x - s.cx, dz = q.z - s.cz, c = Math.cos(s.ry), sn = Math.sin(s.ry);
+        if (Math.abs(dx * c - dz * sn) < s.hw && Math.abs(dx * sn + dz * c) < s.hd && q.y < s.top(q.x, q.z) && q.y > s.bot) { bad.push(`${id} LOS ${x},${z}`); k = 2; break; } } } } }
+  ok("#54 souls lanes: trooper lane is clear and the souls vantage sees every trooper slot", bad.length === 0, bad.slice(0, 4).join("; "));
+  ok("#54 every layout path spawns clear of solids at its middle", lanes.every((id) => LEVEL_DEFS[id].paths.every((p) => { const q = freePoint(p, 0, 0, 0); return !blocked(levelSolids(LEVEL_DEFS[id]), q.x, q.y, q.z); }))); }
+{ const b = readFileSync("assets/models/wall_straight_v1.glb"); const g: any = await new Promise((res, rej) => new GLTFLoader().parse(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength), "", res, rej)); fixStrips(g.scene);
+  let hgt = 0, off = false; g.scene.traverse((o: any) => { if (o.isMesh && /_E$/.test(o.material.name)) { o.geometry.computeBoundingBox(); hgt = o.geometry.boundingBox.max.y - o.geometry.boundingBox.min.y; off = o.material.polygonOffset && o.material.polygonOffsetFactor < 0; } });
+  ok("#56 glow strips are pulled forward in depth and 1.6x taller (8 cm to 12.8 cm)", off && Math.abs(hgt - 0.128) < 1e-3, `${hgt.toFixed(3)} m`); }
 console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);
 })();

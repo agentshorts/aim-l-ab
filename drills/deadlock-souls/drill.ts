@@ -6,7 +6,11 @@ import { SoulSim, Orb } from "./sim";
 import { ORB } from "../../core/spec";
 const DIFF = [ { perSide: 2, variance: 0, react: 0.9 }, { perSide: 3, variance: 0.1, react: 0.45 }, { perSide: 4, variance: 0.2, react: 0.28 }, { perSide: 4, variance: 0.3, react: 0.17 } ];
 import { DMG, trooperFeedback } from "./feedback";
-export function soulsDrill(): Drill {
+import { LEVEL_DEFS, buildLevel, buildZips, aimAngles } from "../deadlock-tracking/levels";
+/** #54 lane layouts that can host souls (LevelDefs with a souls vantage) */
+export const SOULS_LAYOUTS = () => Object.values(LEVEL_DEFS).filter((l) => l.souls);
+export function soulsDrill(layoutId?: string): Drill {
+  const LY = layoutId && LEVEL_DEFS[layoutId]?.souls ? LEVEL_DEFS[layoutId] : null; const eye = new THREE.Vector3(...(LY ? LY.souls!.vantage : [0, 1.7, 0])); let cover: THREE.Object3D[] = [];
   let w: ReturnType<typeof makeWorld>, ctx: DrillCtx, sim: SoulSim; const ray = new THREE.Raycaster(); const center = new THREE.Vector2(0, 0);
   const tv = new Map<number, ReturnType<typeof makeTrooper>>(), ov = new Map<number, ReturnType<typeof makeOrb>>();
   let c: Record<string, number> = {}, errs: number[] = [], lhErrs: number[] = [], seen = 0;
@@ -20,7 +24,8 @@ export function soulsDrill(): Drill {
     ray.setFromCamera(center, w.cam); const targets: THREE.Object3D[] = [];
     for (const [id, v] of ov) { const o = sim.orbs.find((x) => x.id === id); if (o && o.state !== "claimed") targets.push(v.g); }
     for (const [id, v] of tv) { const t = sim.troopers.find((x) => x.id === id); if (t?.alive) targets.push(v.hit); }
-    const hit = ray.intersectObjects(targets, true)[0];
+    const hit0 = ray.intersectObjects([...targets, ...cover], true)[0]; // #54 layout props block shots
+    const hit = hit0 && targets.some((t) => t === hit0.object || t.getObjectById(hit0.object.id)) ? hit0 : undefined;
     const { fx, sfx } = ctx;
     if (!hit) { add("miss"); fx.label(null, "miss", "#9aa4a8", "missFeedback"); sfx.play("miss"); return "miss"; }
     for (const [id, v] of ov) if (hit.object.parent === v.g) { const o = sim.orbs.find((x) => x.id === id)!; const r = sim.shootOrb(o); add(r.res); const at = orbPos(o);
@@ -36,14 +41,15 @@ export function soulsDrill(): Drill {
   }
   const mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + Math.abs(y), 0) / a.length : 0);
   const drill: Drill = {
-    id: "deadlock-souls", title: "Souls: last hit, secure, deny", primary: "points",
+    id: LY ? `deadlock-souls-${LY.id}` : "deadlock-souls", title: LY ? `Souls: ${LY.title}` : "Souls: last hit, secure, deny", primary: "points",
     howTo: `<p>Troopers trade fire in lane (spec numbers: ranged 300 HP, melee 400, medic 350; 35 DPS vs troopers).</p>
 <ul><li>Shoot <b style="color:#e8a93c">amber</b> enemy troopers. Your gun does ${DMG}; the HP bar turns white when one shot kills.</li>
 <li>A kill drops a floating orb: dark, then it lights up (about 0.15 s, estimated). Shoot <b style="color:#7fcf6a">green</b> orbs to secure, <b style="color:#e8a93c">orange</b> orbs to deny.</li>
 <li>You get an 80 ms owner grace on green orbs. Unclaimed orbs pop at about 1 s.</li></ul><p class=hint>Points: last hit 1, secure 2, deny 2, denied or lost orb minus 1.</p>`,
     hudLabels: ["last hits", "secures", "denies", "lost orbs", "orb ms"],
-    init(cx) { ctx = cx; w = makeWorld(cx.canvas, cx.settings.fov); cx.fx.cam = w.cam; zipline(w.scene, -5, 4.5, 4, -60); zipline(w.scene, 5, 4.5, 4, -60); mk(); },
-    reset() { clearViews(); mk(); c = {}; errs = []; lhErrs = []; seen = 0; ctx.input.yaw = 0; ctx.input.pitch = -0.02; },
+    init(cx) { ctx = cx; w = makeWorld(cx.canvas, cx.settings.fov); cx.fx.cam = w.cam; w.cam.position.copy(eye);
+      if (LY) { cover = buildLevel(w.scene, LY); buildZips(w.scene, LY.zips ?? []); } else { zipline(w.scene, -5, 4.5, 4, -60); zipline(w.scene, 5, 4.5, 4, -60); } mk(); },
+    reset() { clearViews(); mk(); c = {}; errs = []; lhErrs = []; seen = 0; ctx.input.yaw = LY?.souls?.yaw0 ?? 0; ctx.input.pitch = LY?.souls?.pitch0 ?? -0.02; },
     setSettings(s: Settings) { w.setFov(s.fov); },
     resize() { w.resize(); },
     update(dt, clicks) {
@@ -73,6 +79,6 @@ export function soulsDrill(): Drill {
     result() { const score = (c.lasthit || 0) + 2 * (c.secure || 0) + 2 * (c.deny || 0) - (c.lostOrb || 0);
       return { score, metrics: { lastHits: c.lasthit || 0, secures: c.secure || 0, denies: c.deny || 0, lostOrbs: c.lostOrb || 0, autoClaimed: c.autoClaim || 0, missedDenies: c.missedDeny || 0, earlyOrbShots: c.early || 0, misses: c.miss || 0, orbErrMs: +mean(errs).toFixed(1), lastHitErrMs: +mean(lhErrs).toFixed(1) } }; },
   };
-  drill.hooks = { get sim() { return sim; }, fire, aimAt(x: number, y: number, z: number) { ctx.input.yaw = Math.atan2(x, z); ctx.input.pitch = Math.atan2(y - 1.7, Math.hypot(x, z)); }, orbY, ORB };
+  drill.hooks = { get sim() { return sim; }, fire, aimAt(x: number, y: number, z: number) { const a = aimAngles(eye, new THREE.Vector3(x, y, -z)); ctx.input.yaw = a.yaw; ctx.input.pitch = a.pitch; }, orbY, ORB, layout: LY?.id ?? "street" };
   return drill;
 }
