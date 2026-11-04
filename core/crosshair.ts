@@ -22,20 +22,30 @@ export function loadCrosshair(search = location.search, ls: Pick<Storage, "getIt
   return { cfg: { ...DEFAULT_CROSSHAIR }, source: "default" };
 }
 // Geometry (ESTIMATED until checked against the site's preview renderer): four pips width x height px,
-// inner edge at BASE_GAP + gap px from center (clamped >= 0); staticGap true means no bloom (trainer has no bloom anyway).
-export const BASE_GAP = 8;
+// Matches the site's crosshair builder preview (assets/js/crosshair-generator.js + assets/css/app.css):
+// pip inner edge offset = max(0, height/2 + gap) px; pips are width x height; pipBorder = 1 px rgba(0,0,0,.92) ring;
+// the element opacity (pipOpacity) applies to the pip and its ring. Dot is a fixed 4x4 px with a 1 px black ring at
+// dotOutlineOpacity, both multiplied by dotOpacity. staticGap=false animates +8 px on the site; the trainer has no bloom, so it draws static.
+export const pipOffset = (c: CrosshairConfig) => Math.max(0, c.height / 2 + c.gap);
+export const DOT_SIZE = 4;
+const ring = (g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
+  g.fillRect(x - 1, y - 1, w + 2, 1); g.fillRect(x - 1, y + h, w + 2, 1); g.fillRect(x - 1, y, 1, h); g.fillRect(x + w, y, 1, h);
+};
 export type CrosshairRenderer = (g: CanvasRenderingContext2D, cx: number, cy: number, c: CrosshairConfig) => void;
 export const drawCrosshair: CrosshairRenderer = (g, cx, cy, c) => {
-  const col = `rgb(${c.r},${c.g},${c.b})`, w = c.width, h = c.height, d = Math.max(0, BASE_GAP + c.gap);
+  const col = `rgb(${c.r},${c.g},${c.b})`, w = c.width, h = c.height, d = pipOffset(c);
   cx = Math.round(cx); cy = Math.round(cy);
   const pips: [number, number, number, number][] = [[cx - w / 2, cy - d - h, w, h], [cx - w / 2, cy + d, w, h], [cx - d - h, cy - w / 2, h, w], [cx + d, cy - w / 2, h, w]];
   g.save();
-  if (c.pipOpacity > 0) { g.globalAlpha = c.pipOpacity;
-    if (c.pipBorder) { g.fillStyle = "#000"; for (const [x, y, a, b] of pips) g.fillRect(x - 1, y - 1, a + 2, b + 2); }
-    g.fillStyle = col; for (const [x, y, a, b] of pips) g.fillRect(x, y, a, b); }
-  const ds = Math.max(2, w);
-  if (c.dotOutlineOpacity > 0) { g.globalAlpha = c.dotOutlineOpacity; g.fillStyle = "#000"; g.fillRect(cx - ds / 2 - 1, cy - ds / 2 - 1, ds + 2, ds + 2); }
-  if (c.dotOpacity > 0) { g.globalAlpha = c.dotOpacity; g.fillStyle = col; g.fillRect(cx - ds / 2, cy - ds / 2, ds, ds); }
+  if (c.pipOpacity > 0 && w > 0 && h > 0) {
+    if (c.pipBorder) { g.globalAlpha = c.pipOpacity * 0.92; g.fillStyle = "#000"; for (const p of pips) ring(g, ...p); }
+    g.globalAlpha = c.pipOpacity; g.fillStyle = col; for (const [x, y, a, b] of pips) g.fillRect(x, y, a, b);
+  }
+  if (c.dotOpacity > 0) {
+    const x = cx - DOT_SIZE / 2, y = cy - DOT_SIZE / 2;
+    if (c.dotOutlineOpacity > 0) { g.globalAlpha = c.dotOpacity * c.dotOutlineOpacity; g.fillStyle = "#000"; ring(g, x, y, DOT_SIZE, DOT_SIZE); }
+    g.globalAlpha = c.dotOpacity; g.fillStyle = col; g.fillRect(x, y, DOT_SIZE, DOT_SIZE);
+  }
   g.restore();
 };
 let renderer: CrosshairRenderer = drawCrosshair;

@@ -2,7 +2,7 @@ import { SoulSim } from "../drills/deadlock-souls/sim";
 import { Mover } from "../drills/deadlock-tracking/mover";
 import { MOVE, TROOPER, ORB } from "../core/spec";
 import { cm360ToDeadlockSens, deadlockSensToCm360, radPerCountFromCm360 } from "../core/sens";
-import { parseShare, loadCrosshair, DEFAULT_CROSSHAIR, toShare, CROSSHAIR_KEY } from "../core/crosshair";
+import { parseShare, loadCrosshair, DEFAULT_CROSSHAIR, toShare, CROSSHAIR_KEY, pipOffset } from "../core/crosshair";
 import { Session } from "../core/session";
 import { LocalStore } from "../core/storage";
 let fails = 0; const ok = (name: string, c: boolean, info = "") => { console.log(`${c ? "PASS" : "FAIL"} ${name} ${info}`); if (!c) fails++; };
@@ -41,6 +41,7 @@ ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToC
   ok("localStorage used when no ?ch", loadCrosshair("", ls).source === "localStorage" && loadCrosshair("", ls).cfg.r === 255);
   const u = loadCrosshair("?ch=10,20,30,-1,3,8,0.5,1,0.2,1,0", ls); ok("?ch wins over localStorage, 11 values in order, booleans 0/1", u.source === "url" && u.cfg.r === 10 && u.cfg.gap === -1 && u.cfg.height === 8 && u.cfg.pipBorder === true && u.cfg.staticGap === false);
   ok("bad ?ch (wrong count) falls back", loadCrosshair("?ch=1,2,3", ls).source === "localStorage"); ok("share roundtrip", toShare(parseShare(toShare(DEFAULT_CROSSHAIR))!) === "0,245,255,-3,4,10,1,0,0,0,1", toShare(DEFAULT_CROSSHAIR)); }
+  ok("pip offset matches site: max(0, h/2+gap); defaults -> 2 px", pipOffset(DEFAULT_CROSSHAIR) === 2 && pipOffset({ ...DEFAULT_CROSSHAIR, gap: -20 }) === 0, String(pipOffset(DEFAULT_CROSSHAIR)));
 // session phases
 { const s = new Session(2); ok("cannot run from idle", !s.go("running")); s.go("countdown"); let tot = 0; for (let i = 0; i < 1000 && s.phase !== "results"; i++) tot += s.step(0.01); ok("countdown 3 s then exactly 2 s of sim time", near(tot, 2, 1e-9) && s.phase === "results", `sim=${tot.toFixed(3)}`); }
 // storage
