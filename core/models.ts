@@ -14,9 +14,18 @@ export function setModelBase(b: string) { base = b; }
 export function preloadModels(): Promise<void> {
   if (all) return all; const loader = new GLTFLoader();
   all = Promise.all(MODEL_NAMES.map((n) => loader.loadAsync(`${base}assets/models/${n}_${MODEL_VERSION[n] ?? "v1"}.glb`)
-    .then((g) => { cache.set(n, { scene: g.scene, animations: g.animations }); modelStatus.loaded.push(n); })
+    .then((g) => { fixStrips(g.scene); cache.set(n, { scene: g.scene, animations: g.animations }); modelStatus.loaded.push(n); })
     .catch(() => { cache.set(n, null); modelStatus.failed.push(n); }))).then(() => undefined);
   return all;
+}
+/** #56 wiggle: emissive strips (materials named *_E) sit flush on panel faces and are only 8 cm tall. Pull them forward in
+ * depth (polygonOffset) and make them 1.6x taller about their centre so they stay more than a pixel wide at range. */
+export function fixStrips(root: THREE.Object3D) {
+  root.traverse((o) => { const me = o as THREE.Mesh; if (!me.isMesh) return; const mats = Array.isArray(me.material) ? me.material : [me.material];
+    if (!mats.some((m) => /_E$/.test(m.name))) return; for (const m of mats) { m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -4; }
+    const g = me.geometry; if (g.userData.stripFixed) return; g.computeBoundingBox(); const bb = g.boundingBox!, c = (bb.min.y + bb.max.y) / 2, hgt = bb.max.y - bb.min.y;
+    if (hgt < 0.15) { const pos = g.attributes.position; for (let i = 0; i < pos.count; i++) pos.setY(i, c + (pos.getY(i) - c) * 1.6); pos.needsUpdate = true; g.computeBoundingBox(); g.computeBoundingSphere(); }
+    g.userData.stripFixed = true; });
 }
 export function modelsReady() { return all ?? Promise.resolve(); }
 /** A fresh instance (skinned meshes cloned with their skeleton), or null when not loaded. */

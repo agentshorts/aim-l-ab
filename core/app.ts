@@ -18,8 +18,8 @@ export function mount(el: HTMLElement, opts: MountOpts = {}) {
   const route = async () => {
     cur?.dispose(); cur = null; el.replaceChildren(); const r = location.hash.replace(/^#\/?/, "");
     const nav = (x: string) => { location.hash = "#/" + x; };
-    const tl = r.startsWith("tracking/") ? r.slice(9) : undefined;
-    if (r === "souls" || r === "tracking" || r === "cover" || tl) { await Promise.race([modelsReady(), new Promise((res) => setTimeout(res, 4000))]); const d = r === "souls" ? soulsDrill() : r === "cover" ? coverFireDrill() : trackingDrill(tl); const sh = await runDrill(el, d, store, nav); cur = sh; api.drill = sh; api.hooks = d.hooks; }
+    const tl = r.startsWith("tracking/") ? r.slice(9) : undefined, sl = r.startsWith("souls/") ? r.slice(6) : undefined;
+    if (r === "souls" || r === "tracking" || r === "cover" || tl || sl) { await Promise.race([modelsReady(), new Promise((res) => setTimeout(res, 4000))]); const d = r === "souls" || sl ? soulsDrill(sl) : r === "cover" ? coverFireDrill() : trackingDrill(tl); const sh = await runDrill(el, d, store, nav); cur = sh; api.drill = sh; api.hooks = d.hooks; }
     else { await renderHub(el, store, nav); api.drill = null; }
     api.route = r; el.dispatchEvent(new CustomEvent("aimlab:route", { detail: r }));
   };
