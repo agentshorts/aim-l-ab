@@ -14,4 +14,6 @@ All assets in this pack are original work. Each one was modelled procedurally in
 | building_tower_v1.glb | original (procedural) | original |
 | zipline_pylon_v1.glb | original (procedural) | original |
 | zipline_cable_10m_v1.glb | original (procedural) | original |
-| target_dummy_v2.glb | original (procedural rig and keyframed clips), replaces v1 | original |
+| target_dummy_v3.glb | original (procedural rig and keyframed clips), replaces v2 (slide clip grounded) | original |
+| bridge_deck_30m_v2.glb | original (procedural) | original |
+| ramp_17m_v1.glb | original (procedural) | original |
