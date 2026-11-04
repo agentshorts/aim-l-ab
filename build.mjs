@@ -1,7 +1,7 @@
 import { build } from "esbuild";
-import { mkdirSync, copyFileSync, writeFileSync, readdirSync } from "fs";
+import { rmSync, mkdirSync, copyFileSync, writeFileSync, readdirSync } from "fs";
 // Output: dist/aimlab.js (single IIFE bundle, CSS inlined) + dist/assets/fonts. Drop dist/ into assets/js/aim-trainer/.
-mkdirSync("dist/assets/fonts", { recursive: true }); mkdirSync("dist/assets/models", { recursive: true });
+rmSync("dist/assets/models", { recursive: true, force: true }); mkdirSync("dist/assets/fonts", { recursive: true }); mkdirSync("dist/assets/models", { recursive: true });
 await build({ entryPoints: ["core/app.ts"], bundle: true, outfile: "dist/aimlab.js", target: "es2020", minify: true, format: "iife", loader: { ".css": "text" }, legalComments: "eof" });
 for (const f of ["Oswald-Variable.ttf", "OFL_Oswald.txt"]) copyFileSync(`assets/fonts/${f}`, `dist/assets/fonts/${f}`);
 for (const f of readdirSync("assets/models")) copyFileSync(`assets/models/${f}`, `dist/assets/models/${f}`);
