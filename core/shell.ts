@@ -1,3 +1,4 @@
+import { heroWeapon, Weapon } from "./heroes";
 import { Drill } from "./drill";
 import { Input, LockState } from "./input";
 import { Session, Phase } from "./session";
@@ -20,13 +21,16 @@ export async function runDrill(root: HTMLElement, drill: Drill, store: Store, na
   const top = h("div", { class: "topbar" }, h("a", { class: "btn ghost", href: "#/", onclick: (e: Event) => { e.preventDefault(); nav(""); } }, "Hub"), h("span", { class: "title" }, drill.title), h("span", { class: "sp" }), lockBadge);
   const overlay = h("div", { class: "overlay" }); root.append(stage, top, timer, hud, overlay);
   const input = new Input(cv, () => settings); const fx = new Fx(fc, () => settings.cues); sfx.set(settings.volume, settings.muted); const frame = new FrameStats(); const session = new Session(settings.durationS);
-  drill.init({ canvas: cv, settings, input, fx, sfx });
+  const ammo = h("div", { class: "ammo" }, ""); root.append(ammo); const wctx = { weapon: null as Weapon | null };
+  const mkWeapon = () => { const hw = heroWeapon(settings.heroWeapon); wctx.weapon = hw ? new Weapon(hw) : null; ammo.style.display = hw ? "" : "none"; };
+  mkWeapon(); const onKey = (e: KeyboardEvent) => { if (e.code === "KeyR") wctx.weapon?.reload(); }; addEventListener("keydown", onKey);
+  const ctx = { canvas: cv, settings, input, fx, sfx, get weapon() { return wctx.weapon; } }; drill.init(ctx);
   const fit = () => { xc.width = xc.clientWidth * devicePixelRatio; xc.height = xc.clientHeight * devicePixelRatio; drill.resize(); drawX(); };
   const drawX = () => { const g = xc.getContext("2d")!; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, xc.width, xc.height); g.scale(devicePixelRatio, devicePixelRatio); renderCrosshair(g, xc.clientWidth / 2, xc.clientHeight / 2, xh); };
   addEventListener("resize", fit); fit();
   const show = (...kids: Node[]) => { overlay.replaceChildren(...kids); overlay.classList.remove("hidden"); };
   const hide = () => overlay.classList.add("hidden");
-  const start = () => { sfx.unlock(); fx.clear(); lastCount = 0; drill.reset(); frame.reset(); input.stats.latencyMs = []; session.durationS = settings.durationS; session.go("countdown"); input.lock(); };
+  const start = () => { sfx.unlock(); fx.clear(); lastCount = 0; mkWeapon(); drill.reset(); frame.reset(); input.stats.latencyMs = []; session.durationS = settings.durationS; session.go("countdown"); input.lock(); };
   const startCard = () => h("div", { class: "panel" }, h("h2", {}, drill.title), h("div", { html: drill.howTo }), h("p", { class: "hint" }, "Click Start to lock the mouse. Esc pauses."),
     h("div", { style: "display:flex;gap:8px;margin-top:10px" }, h("button", { class: "btn", id: "start", onclick: start }, "Start"), h("button", { class: "btn ghost", onclick: () => show(settingsCard()) }, "Settings")));
   const settingsCard = () => h("div", {}, settingsPanel(settings, async (s) => { await store.saveSettings(s); drill.setSettings(s); sfx.set(s.volume, s.muted); fit(); }, (v, m) => sfx.set(v, m)), h("div", { style: "margin-top:8px" }, h("button", { class: "btn", onclick: () => show(startCard()) }, "Done")));
@@ -55,12 +59,14 @@ export async function runDrill(root: HTMLElement, drill: Drill, store: Store, na
   let lastCount = 0, wasCountdown = false;
   show(startCard());
   const stop = loop((dt, now) => {
-    const clicks = input.consume(now); const sdt = session.step(dt);
-    drill.update(sdt, session.phase === "running" ? clicks : [], now); drill.render(); fx.draw(now / 1000);
+    let clicks = input.consume(now); const sdt = session.step(dt); const wp = wctx.weapon;
+    // hero weapon: tracking holds fire inside the drill; elsewhere each click is a trigger pull limited by cadence and ammo
+    if (wp && session.phase === "running") { if (drill.holdsFire) wp.update(0); else { wp.update(sdt); clicks = clicks.filter(() => wp.tryFire()); } }
+    drill.update(sdt, session.phase === "running" ? clicks : [], now); if (wp) ammo.textContent = wp.label(); drill.render(); fx.draw(now / 1000);
     if (session.phase === "countdown") { const n = Math.ceil(session.countdown); if (n !== lastCount) { lastCount = n; sfx.play("countdown"); } }
     timer.textContent = session.phase === "countdown" ? String(Math.ceil(session.countdown)) : session.phase === "running" || session.phase === "paused" ? session.remaining().toFixed(1) : "";
     const v = drill.hud(); stats.forEach((s, i) => s.set(v[i] ?? ""));
   }, frame);
-  const api = { fx, sfx, session, input, frame, drill, start, finish, reloadCrosshair(search?: string) { xh = loadCrosshair(search).cfg; drawX(); }, setCrosshair(c: CrosshairConfig) { xh = c; drawX(); }, get crosshair() { return xh; }, dispose() { stop(); input.unlock(); removeEventListener("resize", fit); root.replaceChildren(); } };
+  const api = { get weapon() { return wctx.weapon; }, fx, sfx, session, input, frame, drill, start, finish, reloadCrosshair(search?: string) { xh = loadCrosshair(search).cfg; drawX(); }, setCrosshair(c: CrosshairConfig) { xh = c; drawX(); }, get crosshair() { return xh; }, dispose() { stop(); input.unlock(); removeEventListener("resize", fit); removeEventListener("keydown", onKey); root.replaceChildren(); } };
   return api;
 }
