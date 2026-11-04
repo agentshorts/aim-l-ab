@@ -18,3 +18,5 @@ export const MOVE = {
   zipline: { inner: 18, outer: 21 },
   airSlowCap: 450 * HU, airAccelSlow: 15, airAccelFast: 5, // EST
 };
+// Community measured, not published by Valve (see specs/input_v1.md): degrees per mouse count at in-game sens 1.
+export const DEADLOCK_YAW_DEG = 0.044;
