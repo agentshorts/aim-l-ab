@@ -8,8 +8,8 @@ import { loadCrosshair, renderCrosshair, CrosshairConfig } from "./crosshair";
 import { h, settingsPanel, stat } from "./ui";
 import { lineChart } from "./chart";
 import { Fx } from "./fx";
-import { AudioCore } from "./audio";
-export const sfx = new AudioCore();
+import { sfx } from "./sfx_core";
+export { sfx };
 export async function runDrill(root: HTMLElement, drill: Drill, store: Store, nav: (r: string) => void) {
   const settings: Settings = await store.loadSettings();
   let xh: CrosshairConfig = loadCrosshair().cfg;
@@ -29,7 +29,7 @@ export async function runDrill(root: HTMLElement, drill: Drill, store: Store, na
   const start = () => { sfx.unlock(); fx.clear(); lastCount = 0; drill.reset(); frame.reset(); input.stats.latencyMs = []; session.durationS = settings.durationS; session.go("countdown"); input.lock(); };
   const startCard = () => h("div", { class: "panel" }, h("h2", {}, drill.title), h("div", { html: drill.howTo }), h("p", { class: "hint" }, "Click Start to lock the mouse. Esc pauses."),
     h("div", { style: "display:flex;gap:8px;margin-top:10px" }, h("button", { class: "btn", id: "start", onclick: start }, "Start"), h("button", { class: "btn ghost", onclick: () => show(settingsCard()) }, "Settings")));
-  const settingsCard = () => h("div", {}, settingsPanel(settings, async (s) => { await store.saveSettings(s); drill.setSettings(s); sfx.set(s.volume, s.muted); fit(); }), h("div", { style: "margin-top:8px" }, h("button", { class: "btn", onclick: () => show(startCard()) }, "Done")));
+  const settingsCard = () => h("div", {}, settingsPanel(settings, async (s) => { await store.saveSettings(s); drill.setSettings(s); sfx.set(s.volume, s.muted); fit(); }, (v, m) => sfx.set(v, m)), h("div", { style: "margin-top:8px" }, h("button", { class: "btn", onclick: () => show(startCard()) }, "Done")));
   input.onState = (s: LockState) => { lockBadge.textContent = `mouse: ${s}${s === "locked" ? (input.rawActive ? " (raw)" : " (os accel)") : ""}`;
     if (s === "unlocked" && session.phase === "running") session.go("paused");
     if (s === "locked" && session.phase === "paused") session.go("running"); };

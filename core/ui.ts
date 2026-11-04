@@ -4,7 +4,7 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<s
   const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (k.startsWith("on")) (e as any)[k] = v; else if (k === "html") e.innerHTML = v; else e.setAttribute(k, String(v)); }
   for (const c of kids) if (c != null) e.append(c); return e;
 }
-export function settingsPanel(s: Settings, onChange: (s: Settings) => void) {
+export function settingsPanel(s: Settings, onChange: (s: Settings) => void, onLive?: (volume: number, muted: boolean) => void) {
   const inp = (id: string, v: any, step = "any") => h("input", { id, type: "number", step, value: v });
   const cm = inp("s-cm", s.cm360), dpi = inp("s-dpi", s.dpi, "1"), dl = inp("s-dl", cm360ToDeadlockSens(s.cm360, s.dpi).toFixed(3)), fov = inp("s-fov", s.fov, "1");
   const dur = inp("s-dur", s.durationS, "1");
@@ -18,7 +18,8 @@ export function settingsPanel(s: Settings, onChange: (s: Settings) => void) {
     const n = normalize({ ...s, cm360: +cm.value, dpi: +dpi.value, fov: +fov.value, difficulty: +diff.value, durationS: +dur.value, rawInput: raw.checked, cuePreset: preset.value, cues, volume: +vol.value, muted: mute.checked }); Object.assign(s, n); onChange(n); };
   preset.onchange = () => { if (preset.value !== "custom") { const c = presetCues(preset.value as Exclude<CuePreset, "custom">); CUE_KEYS.forEach((k, i) => (cueBoxes[i].checked = c[k])); } fire(); };
   cueBoxes.forEach((b) => (b.onchange = () => { preset.value = "custom"; fire(); }));
-  vol.onchange = fire; mute.onchange = fire;
+  // volume applies live while dragging; the save (and any re-render) waits for release
+  vol.oninput = () => onLive?.(+vol.value, mute.checked); vol.onchange = fire; mute.onchange = () => { onLive?.(+vol.value, mute.checked); fire(); };
   cm.oninput = () => { dl.value = cm360ToDeadlockSens(+cm.value, +dpi.value).toFixed(3); fire(); };
   dpi.oninput = () => { dl.value = cm360ToDeadlockSens(+cm.value, +dpi.value).toFixed(3); fire(); };
   dl.oninput = () => { cm.value = deadlockSensToCm360(+dl.value, +dpi.value).toFixed(2); fire(); };
