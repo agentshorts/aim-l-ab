@@ -16,10 +16,12 @@ export class SoulSim {
   t = 0; troopers: Trooper[] = []; orbs: Orb[] = []; events: Event[] = []; nid = 1; r: () => number; wave: WavePhase = "fighting"; clearedAt = 0; waves = 0;
   constructor(public o: SimOpts) { this.r = rng(o.seed); this.spawnWave(); }
   spawnWave() {
-    const kinds: Kind[] = ["ranged", "ranged", "melee", "medic"]; this.troopers = []; this.waves++;
-    for (const team of ["ally", "enemy"] as Team[]) for (let i = 0; i < this.o.perSide; i++) {
+    const kinds: Kind[] = ["ranged", "ranged", "melee", "medic"]; this.waves++;
+    // survivors of the last wave keep their hp and place (clearing one side no longer resets the other); the new wave joins behind them
+    const survivors = this.troopers.filter((t) => t.alive); this.troopers = survivors;
+    for (const team of ["ally", "enemy"] as Team[]) for (let i = 0; i < Math.min(this.o.perSide, 2 * this.o.perSide - survivors.filter((t) => t.team === team).length); i++) { // cap a side at two waves
       const kind = kinds[i % 4]; const hp = TROOPER[kind].hp;
-      this.troopers.push({ id: this.nid++, team, kind, hp, max: hp, x: (i - (this.o.perSide - 1) / 2) * 1.8 + (team === "ally" ? 0.9 : 0), z: team === "ally" ? 13 : 19, alive: true });
+      this.troopers.push({ id: this.nid++, team, kind, hp, max: hp, x: (i - (this.o.perSide - 1) / 2) * 1.8 + (team === "ally" ? 0.9 : 0), z: (team === "ally" ? 13 : 19) + (survivors.some((t) => t.team === team) ? (team === "ally" ? -1.5 : 1.5) : 0), alive: true });
     }
     this.wave = "fighting"; this.events.push({ t: this.t, type: "wave" });
   }
