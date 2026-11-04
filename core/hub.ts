@@ -1,5 +1,6 @@
 import { Store, bestOf } from "./storage";
 import { h, settingsPanel } from "./ui";
+import { sfx } from "./sfx_core";
 import { lineChart } from "./chart";
 import { loadCrosshair, toShare } from "./crosshair";
 export const DRILLS = [
@@ -22,7 +23,7 @@ export async function renderHub(root: HTMLElement, store: Store, nav: (r: string
   root.replaceChildren(h("div", { class: "hub" },
     h("header", {}, h("h1", {}, "Aim Lab"), h("span", { class: "hint" }, "Deadlock mechanics drills")),
     h("div", { class: "cols" }, h("div", {}, h("div", { class: "cards" }, ...cards.map((c) => c.el))),
-      h("div", {}, settingsPanel(s, (n) => store.saveSettings(n).then(() => renderHub(root, store, nav))),
+      h("div", {}, settingsPanel(s, (n) => store.saveSettings(n).then(() => renderHub(root, store, nav)), (v, m) => sfx.set(v, m)),
         h("div", { class: "panel", style: "margin-top:14px" }, h("h3", {}, "Data"), h("p", { class: "hint" }, "Settings, history and personal bests are saved in this browser."),
           h("button", { class: "btn", id: "export", onclick: exp }, "Export JSON"), " ", h("button", { class: "btn ghost", onclick: () => file.click() }, "Import JSON"), file, msg),
         h("div", { class: "panel", style: "margin-top:14px" }, h("h3", {}, "Crosshair"), h("p", { class: "hint" }, `Source: ${xh.source}. Uses the site's crosshair builder (share code below).`), h("code", { style: "font-size:12px" }, toShare(xh.cfg)))))));

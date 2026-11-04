@@ -1,5 +1,6 @@
 import { SFX } from "../core/sfx_synth";
 import { trooperFeedback, DMG as SOUL_DMG } from "../drills/deadlock-souls/feedback";
+import { labelLayout, LABEL_LANES, LANE_PX, Item } from "../core/fx";
 import { normalize as norm2, CUE_KEYS as CK } from "../core/settings";
 import { SoulSim } from "../drills/deadlock-souls/sim";
 import { Mover } from "../drills/deadlock-tracking/mover";
@@ -67,4 +68,7 @@ ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToC
   ok("body hit on full-HP trooper: result hit, hp -40", r.res === "hit" && near(hp0 - e.hp, 40), `res=${r.res} dhp=${hp0 - e.hp}`);
   ok("body hit feedback: hit sound, damage number 40, small marker", fb.sound === "hit" && fb.number?.text === "40" && fb.marker === "hit" && typeof SFX[fb.sound] === "function");
   const lh = trooperFeedback("lasthit"); ok("last hit feedback: lasthit sound, kill marker", lh.sound === "lasthit" && lh.marker === "kill" && lh.number?.text === "LAST HIT"); }
+{ const L = (t0: number): Item => ({ kind: "label", t0, dur: 0.9, color: "#fff", text: "x" }); const its = [L(0), L(0.1), L(0.2), L(0.3)]; const m = labelLayout(its);
+  const ys = [...m.values()]; ok("center labels never share a lane", new Set(ys).size === ys.length && ys.every((a) => ys.every((b) => a === b || Math.abs(a - b) >= LANE_PX)), ys.join(","));
+  ok(`label lanes capped at ${LABEL_LANES}, oldest dropped, newest nearest center`, m.size === LABEL_LANES && !m.has(its[0]) && m.get(its[3]) === 60); }
 console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);

@@ -1,7 +1,13 @@
 import * as THREE from "three";
 import { Cues } from "./settings";
 // 2D feedback overlay drawn over the 3D view: hit markers, floating numbers and labels, screen flashes, world-anchored rings and meters.
-type Item = { kind: "marker" | "text" | "flash" | "label"; t0: number; dur: number; pos?: THREE.Vector3; text?: string; color: string; size?: number; kill?: boolean };
+export type Item = { kind: "marker" | "text" | "flash" | "label"; t0: number; dur: number; pos?: THREE.Vector3; text?: string; color: string; size?: number; kill?: boolean };
+/** Center labels stack in lanes (newest nearest the crosshair, 24 px apart); beyond 3 lanes the oldest is dropped. Returns y offsets above center. */
+export const LABEL_LANES = 3, LANE_PX = 24;
+export function labelLayout(items: Item[]): Map<Item, number> {
+  const ls = items.filter((i) => i.kind === "label").sort((a, b) => b.t0 - a.t0).slice(0, LABEL_LANES); const m = new Map<Item, number>();
+  ls.forEach((i, lane) => m.set(i, 60 + lane * LANE_PX)); return m;
+}
 export type Ring = { pos: THREE.Vector3; frac: number; color: string; width?: number; r?: number; label?: string };
 export class Fx {
   items: Item[] = []; rings: Ring[] = []; meter: { frac: number; text: string } | null = null; now = 0; cam: THREE.Camera | null = null; log: string[] = [];
@@ -18,11 +24,12 @@ export class Fx {
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H); const cx = W / 2, cy = H / 2;
     const proj = (p: THREE.Vector3) => { const v = p.clone().project(this.cam!); return v.z < 1 ? { x: (v.x + 1) / 2 * W, y: (1 - v.y) / 2 * H } : null; };
     this.items = this.items.filter((i) => now - i.t0 < i.dur);
+    const lanes = labelLayout(this.items);
     for (const i of this.items) { const k = (now - i.t0) / i.dur; g.globalAlpha = 1 - k;
       if (i.kind === "flash") { const gr = g.createRadialGradient(cx, cy, Math.min(W, H) * 0.3, cx, cy, Math.max(W, H) * 0.7); gr.addColorStop(0, "rgba(0,0,0,0)"); gr.addColorStop(1, i.color); g.globalAlpha = 0.35 * (1 - k); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
       else if (i.kind === "marker") { const a = 6 + k * 4, b = a + (i.kill ? 9 : 6); g.strokeStyle = i.color; g.lineWidth = i.kill ? 3 : 2;
         for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) { g.beginPath(); g.moveTo(cx + sx * a, cy + sy * a); g.lineTo(cx + sx * b, cy + sy * b); g.stroke(); } }
-      else if (i.kind === "label") { g.font = `600 ${i.size ?? 18}px Oswald, sans-serif`; g.textAlign = "center"; g.fillStyle = i.color; g.fillText(i.text!, cx, cy - 60 - k * 20); }
+      else if (i.kind === "label") { const off = lanes.get(i); if (off === undefined) continue; g.font = `600 ${i.size ?? 18}px Oswald, sans-serif`; g.textAlign = "center"; g.fillStyle = i.color; g.fillText(i.text!, cx, cy - off - k * 6); }
       else if (i.pos && this.cam) { const p = proj(i.pos); if (!p) continue; g.font = `600 ${i.size ?? 16}px Oswald, sans-serif`; g.textAlign = "center"; g.lineWidth = 3; g.strokeStyle = "rgba(0,0,0,.7)"; const y = p.y - 10 - k * 30; g.strokeText(i.text!, p.x, y); g.fillStyle = i.color; g.fillText(i.text!, p.x, y); } }
     g.globalAlpha = 1;
     for (const r of this.rings) { if (!this.cam) break; const p = proj(r.pos); if (!p) continue; const rad = r.r ?? 18; g.strokeStyle = "rgba(0,0,0,.5)"; g.lineWidth = (r.width ?? 3) + 2; g.beginPath(); g.arc(p.x, p.y, rad, 0, Math.PI * 2); g.stroke();
