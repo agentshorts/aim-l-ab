@@ -113,7 +113,7 @@ ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToC
   ok("level system: zipline only on paths with a cable", pathModes(lane, ["walk", "zip"]).join() === "walk" && pathModes({ ...lane, zip: true }, ["walk", "zip"]).join() === "walk,zip");
   const a = aimAngles(new THREE.Vector3(0, 9.7, 0), new THREE.Vector3(0, 1.7, -8)); ok("level system: aim angles look down at a target below", Math.abs(a.yaw) < 1e-9 && Math.abs(a.pitch + Math.PI / 4) < 1e-9);
   for (const id of LEVEL_ORDER) { const L = LEVEL_DEFS[id]; ok(`level ${id}: has paths, vantage above ground, paths at least 8 m`, L.paths.length > 0 && L.vantage[1] >= 1.7 && L.paths.every((q) => pathLen(q) >= 8)); } }
-{ ok("hero weapons: 14 heroes, every entry links deadlock.wiki", HERO_WEAPONS.length >= 10 && HERO_WEAPONS.every((h) => h.src.startsWith("https://deadlock.wiki/") && h.bps > 0 && h.ammo > 0 && h.reloadS > 0), `${HERO_WEAPONS.length}`);
+{ ok("hero weapons: all 44 heroes, unique ids, every entry links deadlock.wiki", HERO_WEAPONS.length === 44 && new Set(HERO_WEAPONS.map((h) => h.id)).size === 44 && HERO_WEAPONS.every((h) => h.src.startsWith("https://deadlock.wiki/") && h.bps > 0 && h.ammo > 0 && h.reloadS > 0), `${HERO_WEAPONS.length}`);
   const g = new Weapon(heroWeapon("lady-geist")!); let n = 0; for (let i = 0; i < 20; i++) if (g.tryFire()) n++; ok("clicks faster than the cadence are dropped", n === 1 && g.blocked === 19);
   const w = new Weapon(heroWeapon("haze")!); let t = 0, firing = 0; while (t < 10) { if (w.hold(1 / 120)) firing += 1 / 120; t += 1 / 120; }
   const cyc = 25 / 9.524 + 2.35; ok("held fire: Haze empties 25 at 9.524/s then reloads 2.35 s", Math.abs(firing / 10 - (25 / 9.524) / cyc) < 0.05, `firing ${(100 * firing / 10).toFixed(0)}%`);
