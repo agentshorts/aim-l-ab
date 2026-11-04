@@ -1,4 +1,8 @@
 import { SFX } from "../core/sfx_synth";
+import { readFileSync } from "fs";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { MODEL_NAMES, stripRootMotion } from "../core/models";
+import { clipFor, facingFor } from "../drills/deadlock-tracking/dummy";
 import { PROFILES, sampleQ } from "../drills/deadlock-tracking/profile";
 import { trooperFeedback, DMG as SOUL_DMG } from "../drills/deadlock-souls/feedback";
 import { labelLayout, LABEL_LANES, LANE_PX, Item } from "../core/fx";
@@ -12,7 +16,7 @@ import { Session } from "../core/session";
 import { LocalStore } from "../core/storage";
 let fails = 0; const ok = (name: string, c: boolean, info = "") => { console.log(`${c ? "PASS" : "FAIL"} ${name} ${info}`); if (!c) fails++; };
 const near = (a: number, b: number, e = 1e-6) => Math.abs(a - b) <= e;
-(async () => {
+const p1 = (async () => {
 { const s = new SoulSim({ perSide: 1, variance: 0, playerDamage: 40, oppReact: 5, seed: 1 }); const e = s.troopers[1];
   s.step(0.5); ok("trooper HP drop per tick = 35 dps * 0.5 s = 17.5", near(e.hp, 300 - 17.5), `hp=${e.hp}`);
   for (let i = 0; i < 2000 && e.alive; i++) s.step(0.01); ok("ranged 300 hp dies at 9.0 s (18 ticks)", near(s.t, 9.0, 0.011), `t=${s.t.toFixed(3)}`);
@@ -78,4 +82,17 @@ ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToC
   const perMin = flips / 10; ok("realistic profile reversal rate consistent with study intervals (median 0.83 s, EST): 25..90 per min", perMin > 25 && perMin < 90, `${perMin.toFixed(1)}/min`);
   ok("realistic profile only uses legal transitions", m.illegal === 0);
   ok("settings default classic, accepts realistic", norm2({}).moveProfile === "classic" && norm2({ moveProfile: "realistic" }).moveProfile === "realistic" && norm2({ moveProfile: "x" }).moveProfile === "classic"); }
+(async () => { await p1;
+{ const parse = (n: string) => new Promise<any>((res, rej) => { const b = readFileSync(`assets/models/${n}_v1.glb`); new GLTFLoader().parse(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength), "", res, rej); });
+  let okN = 0; for (const n of MODEL_NAMES) { try { await parse(n); okN++; } catch (e) { console.log("parse fail", n, String(e).slice(0, 80)); } } ok(`asset pack: all ${MODEL_NAMES.length} GLBs parse with GLTFLoader`, okN === MODEL_NAMES.length, `${okN}`);
+  const d = await parse("target_dummy"); const names = d.animations.map((c: any) => c.name).sort().join(","); let bones = 0; d.scene.traverse((o: any) => { if (o.isBone) bones++; });
+  ok("dummy: 12 bones, clips idle/run/dash/slide/jump", bones === 12 && names === "dash,idle,jump,run,slide", `${bones} bones, ${names}`);
+  const dash = d.animations.find((c: any) => c.name === "dash"); const tr = dash.tracks.find((t: any) => t.name === "root.position"); let maxZ = -1e9; for (let i = 2; i < tr.values.length; i += 3) maxZ = Math.max(maxZ, tr.values[i]);
+  ok("dummy dash root motion travels along +Z (peak about 1.2 m)", Math.abs(maxZ - 1.2) < 0.05, `peak z ${maxZ.toFixed(3)}`);
+  const st = stripRootMotion(d.animations); const rp = (n: string) => st.find((c) => c.name === n)!.tracks.find((t) => t.name === "root.position")!.values;
+  ok("root travel stripped: no X/Z in any clip, no Y in jump, slide crouch Y kept", st.every((c) => { const v = c.tracks.find((t) => t.name === "root.position")?.values ?? []; for (let i = 0; i < v.length; i += 3) if (v[i] || v[i + 2]) return false; return true; }) && [...rp("jump")].every((x) => x === 0) && Math.min(...rp("slide")) < -0.4);
+  ok("clips re-based to start at 0 with seamless loop ends", st.every((c) => c.tracks.every((t) => t.times[0] === 0)) && Math.abs(st.find((c) => c.name === "run")!.duration - (0.875 - 1 / 24)) < 0.002, `run ${st.find((c) => c.name === "run")!.duration.toFixed(3)} s`);
+  ok("mover state to clip mapping", clipFor("dash", 9) === "dash" && clipFor("slide", 3) === "slide" && clipFor("air", 0) === "jump" && clipFor("walk", 6) === "run" && clipFor("walk", 0) === "idle" && clipFor("zip", 18) === "idle");
+  ok("dummy faces its travel direction (clip +Z to world +/-X)", facingFor(5, 0) === Math.PI / 2 && facingFor(-5, 0) === -Math.PI / 2 && facingFor(0, 1) === 1); }
 console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);
+})();
