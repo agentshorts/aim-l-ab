@@ -1,4 +1,5 @@
 import { SFX } from "../core/sfx_synth";
+import { trooperFeedback, DMG as SOUL_DMG } from "../drills/deadlock-souls/feedback";
 import { normalize as norm2, CUE_KEYS as CK } from "../core/settings";
 import { SoulSim } from "../drills/deadlock-souls/sim";
 import { Mover } from "../drills/deadlock-tracking/mover";
@@ -61,4 +62,9 @@ ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToC
   const pro = norm2({ cuePreset: "pro", cues: { hitMarkers: true } }); ok("pro preset forces cues off", CK.every((k) => !pro.cues[k]));
   const cu = norm2({ cuePreset: "custom", cues: { hitMarkers: false } }); ok("custom keeps per-cue toggles", !cu.cues.hitMarkers && cu.cues.orbCues);
   ok("volume clamped, mute bool", norm2({ volume: 7, muted: 1 }).volume === 1 && norm2({ muted: 1 }).muted === true); }
+{ const s = new SoulSim({ perSide: 1, variance: 0, playerDamage: SOUL_DMG, oppReact: 9, seed: 1 }); const e = s.troopers[1]; const hp0 = e.hp;
+  const r = s.shootTrooper(e); const fb = trooperFeedback(r.res);
+  ok("body hit on full-HP trooper: result hit, hp -40", r.res === "hit" && near(hp0 - e.hp, 40), `res=${r.res} dhp=${hp0 - e.hp}`);
+  ok("body hit feedback: hit sound, damage number 40, small marker", fb.sound === "hit" && fb.number?.text === "40" && fb.marker === "hit" && typeof SFX[fb.sound] === "function");
+  const lh = trooperFeedback("lasthit"); ok("last hit feedback: lasthit sound, kill marker", lh.sound === "lasthit" && lh.marker === "kill" && lh.number?.text === "LAST HIT"); }
 console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);
