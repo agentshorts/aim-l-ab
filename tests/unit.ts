@@ -43,6 +43,8 @@ const p1 = (async () => {
 { const m = new Mover(["zip"]); m.x = -8; m.set("zip"); m.dir = 1; m.step(0.1); ok("zipline 18 m/s", near(Math.abs(m.vx), 18), `v=${m.vx}`);
   for (let i = 0; i < 2000 && m.mode !== "walk"; i++) m.step(0.005); ok("zip ends by dropping (air) then landing, no teleport", m.log.map((l) => l.mode).join(">") === "zip>air>walk", m.log.map((l) => l.mode).join(">"));
   const m2 = new Mover(["walk"]); m2.set("slide"); ok("illegal transition walk>slide rejected", m2.illegal === 1 && m2.mode === "walk"); }
+{ const m = new Mover(["walk", "dash", "slide"], 2); m.lim = 40; m.dir = 1; m.set("dash"); while (m.tMode < m.dashDur - 0.01) m.step(1 / 240); let n = 0; m.set("slide"); while (m.mode === "slide" && n < 2400) { m.step(1 / 240); n++; }
+  ok("slide after a dash lasts a visible time (0.4 to 1.2 s)", n / 240 > 0.4 && n / 240 < 1.2, `${(n / 240).toFixed(2)} s`); }
 { const m = new Mover(["walk", "dash", "slide", "air", "zip"], 11); for (let i = 0; i < 60000; i++) m.step(1 / 144); ok("60k random steps: no illegal transitions, stays in bounds", m.illegal === 0 && Math.abs(m.x) <= 9 && m.y >= 0, `changes=${m.log.length}`); }
 ok("gravity derived 24.56 m/s^2", near(MOVE.gravity, 24.564, 0.01), MOVE.gravity.toFixed(3));
 // sensitivity math

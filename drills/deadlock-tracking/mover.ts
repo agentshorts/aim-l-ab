@@ -2,6 +2,8 @@ import { MOVE } from "../../core/spec";
 import { MoveProfile, PROFILES, sampleQ } from "./profile";
 // Mover state machine (see specs/state_machines_v1.md)
 // walk -> dash | air | zip ; dash -> slide | walk ; slide -> walk ; air -> walk (land) ; zip -> air (drop keeps momentum)
+/** Slide deceleration = friction x g x this scale. ESTIMATED: 2 gives about 0.68 s from slideMin to walk speed, close to a Deadlock dash-slide; the old 10 gave 0.14 s. */
+export const SLIDE_DECEL_SCALE = 2;
 export type Mode = "walk" | "dash" | "slide" | "air" | "zip";
 const NEXT: Record<Mode, Mode[]> = { walk: ["dash", "air", "zip", "walk"], dash: ["slide", "walk"], slide: ["walk"], air: ["walk"], zip: ["air"] };
 export class Mover {
@@ -14,6 +16,9 @@ export class Mover {
     if (m === "walk") { this.vy = 0; this.y = 0; this.walkFor = this.walkLen(); }
     if (m === "air") { if (this.y <= 0) this.vy = MOVE.jumpV; }
     if (m === "zip") { this.y = 3; this.vy = 0; }
+    // slide entered from a dash starts at least at the slide threshold speed (spec slideMin 350 u/s); before this fix a
+    // dash had already eased to walk speed, so the slide ended on its first frame
+    if (m === "slide") this.vx = this.dir * Math.max(Math.abs(this.vx), MOVE.slideMin);
   }
   // dash speed profile: peak at start easing to walk by end (shape ESTIMATED, peak and duration from spec)
   dashSpeed(t: number) { const k = Math.min(1, t / this.dashDur); return MOVE.walk + (this.dashPeak - MOVE.walk) * (1 - k) * (1 - k); }
@@ -22,7 +27,7 @@ export class Mover {
     switch (this.mode) {
       case "walk": this.vx = this.dir * MOVE.walk; if (this.tMode > this.walkFor) this.pick(); break;
       case "dash": this.vx = this.dir * this.dashSpeed(this.tMode); if (this.tMode >= this.dashDur - 1e-9) this.set(this.allowed.includes("slide") && this.r() < 0.5 ? "slide" : "walk"); break;
-      case "slide": { const sp = Math.abs(this.vx) - MOVE.slideFriction * 9.81 * dt * 10; this.vx = this.dir * Math.max(0, sp); if (sp < MOVE.walk) this.set("walk"); break; } // decel scale ESTIMATED
+      case "slide": { const sp = Math.abs(this.vx) - MOVE.slideFriction * 9.81 * SLIDE_DECEL_SCALE * dt; this.vx = this.dir * Math.max(0, sp); if (sp < MOVE.walk) this.set("walk"); break; }
       case "air": { this.vy -= MOVE.gravity * dt; const a = Math.abs(this.vx) < MOVE.airSlowCap ? MOVE.airAccelSlow : MOVE.airAccelFast;
         if (this.tMode > 0.2) this.vx -= this.dir * a * dt; break; } // air strafe back toward center
       case "zip": this.vx = this.dir * MOVE.zipline.inner; if (this.tMode > 0.9) this.set("air"); break;
