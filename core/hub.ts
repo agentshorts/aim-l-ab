@@ -7,6 +7,7 @@ import { LEVEL_DEFS, LEVEL_ORDER } from "../drills/deadlock-tracking/levels";
 export const DRILLS = [
   { id: "deadlock-souls", route: "souls", title: "Souls", sub: "Last hit troopers, secure your orbs, deny theirs.", primary: "points" },
   { id: "deadlock-tracking", route: "tracking", title: "Tracking", sub: "Stay on a target that dashes, slides, jumps and ziplines.", primary: "on-target %" },
+  { id: "deadlock-cover-fire", route: "cover", title: "Cover fire", sub: "Peek one side of your cover and track enemies dashing cover to cover. Let one get close and you lose.", primary: "points" },
 ];
 export async function renderHub(root: HTMLElement, store: Store, nav: (r: string) => void) {
   const s = await store.loadSettings(); const all = await store.results();

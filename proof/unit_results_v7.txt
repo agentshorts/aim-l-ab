@@ -1,0 +1,100 @@
+PASS trooper HP drop per tick = 35 dps * 0.5 s = 17.5 hp=282.5
+PASS ranged 300 hp dies at 9.0 s (18 ticks) t=9.000
+PASS orb spawns on death, floating share 50 of 100 
+PASS wave phase cleared, respawns after delay 
+PASS new wave spawned 
+PASS clearing the enemy side keeps ally survivors into the next wave (#35) allies 6
+PASS opponent cannot deny before light-up + 80 ms grace at 230 ms
+PASS unclaimed orb pops at 1.0 s to owner (not counted lost) 1000 ms
+PASS last hit at window open: error ~0 ms err=0.00 ms
+PASS orb shot while dark = early 
+PASS orb shot at light-up = secure, err ~0 err=0.10 ms
+PASS claimed orb cannot be claimed twice 
+PASS dash peak = 635 u/s = 16.13 m/s peak=16.10
+PASS dash duration 0.62 s t=0.620 dist=5.97 m (EST)
+PASS jump apex = 45 u = 1.143 m apex=1.139
+PASS zipline 18 m/s v=18
+PASS zip ends by dropping (air) then landing, no teleport zip>air>walk
+PASS illegal transition walk>slide rejected 
+PASS slide after a dash lasts a visible time (0.4 to 1.2 s) 0.68 s
+PASS 60k random steps: no illegal transitions, stays in bounds changes=510
+PASS gravity derived 24.56 m/s^2 24.560
+PASS deadlock sens 1 @ 800 dpi = 25.98 cm/360 25.977
+PASS cm360 <-> deadlock sens roundtrip 
+PASS 35 cm of counts at 800 dpi = exactly 2*pi 
+PASS defaults when nothing set 
+PASS localStorage used when no ?ch 
+PASS ?ch wins over localStorage, 11 values in order, booleans 0/1 
+PASS bad ?ch (wrong count) falls back 
+PASS share roundtrip 0,245,255,-3,4,10,1,0,0,0,1
+PASS pip offset matches site: max(0, h/2+gap); defaults -> 2 px 2
+PASS cannot run from idle 
+PASS countdown 3 s then exactly 2 s of sim time sim=2.000
+PASS sfx hit: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.18s peak=0.64
+PASS sfx lasthit: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.50s peak=1.21
+PASS sfx kill: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.40s peak=0.67
+PASS sfx secure: finite, 0.05..1.6 s, peak 0.05..1.5 len=1.20s peak=1.00
+PASS sfx deny: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.45s peak=1.18
+PASS sfx lost: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.35s peak=0.50
+PASS sfx miss: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.16s peak=0.36
+PASS sfx countdown: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.25s peak=0.55
+PASS sfx go: finite, 0.05..1.6 s, peak 0.05..1.5 len=0.40s peak=0.69
+PASS sfx event mapped: hit 
+PASS sfx event mapped: lasthit 
+PASS sfx event mapped: secure 
+PASS sfx event mapped: deny 
+PASS sfx event mapped: miss 
+PASS sfx event mapped: countdown 
+PASS default preset learn, all cues on 
+PASS pro preset forces cues off 
+PASS custom keeps per-cue toggles 
+PASS volume clamped, mute bool 
+PASS body hit on full-HP trooper: result hit, hp -40 res=hit dhp=40
+PASS body hit feedback: hit sound, damage number 40, small marker 
+PASS last hit feedback: lasthit sound, kill marker 
+PASS center labels never share a lane 60,84,108
+PASS label lanes capped at 3, oldest dropped, newest nearest center 
+PASS realistic reversal sampler hits study median 0.833 s 
+PASS realistic profile reversal rate consistent with study intervals (median 0.83 s, EST): 25..90 per min 51.0/min
+PASS realistic profile only uses legal transitions 
+PASS settings default classic, accepts realistic 
+PASS export/import roundtrip, dedupe on reimport 
+PASS import rejects foreign JSON 
+PASS asset pack: all 13 GLBs parse with GLTFLoader 13
+PASS dummy: 12 bones, clips idle/run/dash/slide/jump 12 bones, dash,idle,jump,run,slide
+PASS dummy v3 dash is one-way along +Z, ending at 1.2 m with no dip end z 1.200
+PASS dummy v3: every clip starts at 0 
+PASS root travel stripped: no X/Z in any clip, no Y in jump, slide crouch Y kept 
+PASS loops trimmed by the duplicate last key, one-shots keep full length run 0.792 s
+  info: mid-slide lowest vertex y = 0.000 m (ground 0)
+PASS slide pose measured against ground (report only) 0.000 m
+PASS mover state to clip mapping 
+PASS dummy faces its travel direction (clip +Z to world +/-X) 
+PASS level system: lane path maps mover x straight onto world x 
+PASS level system: ramp paths carry height 
+PASS level system: dummy yaw follows path and travel sign 
+PASS level system: zipline only on paths with a cable 
+PASS level system: aim angles look down at a target below 
+PASS level high-ground: has paths, vantage above ground, paths at least 8 m 
+PASS level bridge: has paths, vantage above ground, paths at least 8 m 
+PASS level elevated-targets: has paths, vantage above ground, paths at least 8 m 
+PASS level multi-path: has paths, vantage above ground, paths at least 8 m 
+PASS hero weapons: all 44 heroes, unique ids, every entry links deadlock.wiki 44
+PASS clicks faster than the cadence are dropped 
+PASS held fire: Haze empties 25 at 9.524/s then reloads 2.35 s firing 54%
+PASS Abrams single-shell reload: 0.705 + 9 x 0.3525 = 3.88 s from empty 
+PASS settings: hero weapon off by default, unknown ids fall back to off 
+PASS cover fire peek: cover -> out -> peeked in PEEK_S, only peeked can shoot 0.158 s
+PASS cover fire peek: release -> back -> cover, no illegal transitions 
+PASS cover fire layout: last cover row is inside lose distance on every difficulty, first row far outside 
+PASS cover fire: nobody shooting means an enemy reaches you and the round is lost lost at 14.8 s
+PASS cover fire: hidden or spawning enemies take no damage 
+PASS cover fire: a good tracker (on every exposed enemy after 0.25 s) holds 90 s on Hard with kills kills 86, closest 22.6 m
+PASS cover fire: enemies dash at spec peak speed (579 u/s) and never exceed it 14.71 m/s
+PASS cover fire: enemy state machine has no illegal transitions 
+PASS free movement: 2 min per difficulty stays inside the box, no illegal transitions 
+PASS free movement: moves in all four quadrants (left/right and toward/away) 1,1 1,-1 1,0 -1,1 -1,-1 0,1 -1,0 0,-1
+PASS free movement: turns, dashes and jumps get more frequent with difficulty 112 < 184 < 262 < 347
+PASS free movement: dash peak is the spec peak, jump apex about 1.14 m (zip drops excluded) dash 14.54 m/s, apex 1.17 m
+PASS cover fire free movement: enemies strafe sideways, step back and jump between covers, inside the arena strafe frames 1203, back frames 444
+ALL PASS
