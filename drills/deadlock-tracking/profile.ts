@@ -9,9 +9,11 @@ export const PROFILES: Record<MoveProfileId, MoveProfile> = {
     id: "realistic", alwaysReverse: true,
     // strafe reversal interval inverse CDF [quantile, seconds], p10..p90 from 390 reversals in 31 fight clips (EST)
     reversalQ: [[0, 0.15], [0.1, 0.2], [0.25, 0.4], [0.5, 0.833], [0.75, 1.467], [0.9, 2.003], [1, 2.5]],
-    // per decision point. air from ~1.2 jump-like events/min over ~30 reversals/min (EST); dash and zip were not
-    // measurable from video, so they stay as low guesses (see the Decision issue)
-    weights: { walk: 0.84, dash: 0.08, air: 0.05, zip: 0.03 },
+    // per decision point (~30 per min). air from ~1.2 jump-like events/min (EST). dash and zip were not measurable from
+    // video, so they are set from stamina budget and map use (decision recorded in specs/movement_study_v1.md, #22):
+    // dash 0.12 = about 3.6 dashes/min, roughly a third of what stamina regen allows, matching mid-fight spacing use;
+    // zip 0.02 = about 0.6/min, since ziplines are a rotation tool and are rarely ridden inside a fight.
+    weights: { walk: 0.81, dash: 0.12, air: 0.05, zip: 0.02 },
   },
 };
 /** Inverse CDF sample, linear between quantile knots. */

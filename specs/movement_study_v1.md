@@ -37,3 +37,13 @@ Limits: dash, slide and zipline could not be measured reliably from the video si
 - mode weights walk 0.84, air 0.05 (from the jump rate), dash 0.08 and zip 0.03 (low guesses, not measured),
 - dash, slide, jump and zipline speeds unchanged from specs/deadlock_spec_v1.md.
 "Classic" stays the default.
+
+## Decision: dash and zipline weights (#22)
+
+Video could not count dashes or zipline rides reliably, so the realistic profile sets them from reasoning instead of measurement:
+
+- dash 0.12 per decision point (about 3.6 per minute at ~30 decisions per minute). Stamina allows roughly 10 or more dashes per minute; skilled players spend about a third of that on spacing in a duel and keep the rest for escapes. Up from the 0.08 placeholder, which made dashes feel rare next to strafes.
+- zipline 0.02 per decision point (about 0.6 per minute). Ziplines move players between lanes, not inside a fight, so a target on a cable mid-duel should be the exception. Down from 0.03.
+- walk takes the rest (0.81); air stays 0.05 (measured).
+
+Revisit if a HUD stamina pip detector or a manual tag pass on about 20 clips becomes available.
