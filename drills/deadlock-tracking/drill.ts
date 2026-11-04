@@ -27,7 +27,7 @@ export function trackingDrill(levelId?: string): Drill {
       m.lim = pathLen(t.path) / 2; if (!isLane) m.x = (Math.random() - 0.5) * m.lim; t.mover = m; }
     live = 0; tSwitch = 0; mover = T[0].mover; head = T[0].head; };
   const drill: Drill = {
-    id: isLane ? "deadlock-tracking" : `deadlock-tracking-${L.id}`, title: isLane ? L.title : `Tracking: ${L.title}`, primary: "on-target %",
+    holdsFire: true, id: isLane ? "deadlock-tracking" : `deadlock-tracking-${L.id}`, title: isLane ? L.title : `Tracking: ${L.title}`, primary: "on-target %",
     howTo: `<p>Keep the crosshair on the glowing head. The target moves with spec movement numbers:</p>
 <ul><li>walk 6.4 m/s, dash 635/579/562 u/s over 0.62/0.68/0.72 s by speed bucket</li><li>slide after dash (friction 0.1875), jump 295 u/s to 1.14 m, air strafe</li><li>zipline 18 m/s, drop keeps momentum</li></ul><p class=hint>Score is time on target as a percent. Harder levels add moves and shrink the head.</p>${isLane ? "" : `<p>${L.sub}</p>`}`,
     hudLabels: ["on target %", "streak s", "best streak s", "mode"],
@@ -47,7 +47,7 @@ export function trackingDrill(levelId?: string): Drill {
         if (t.dummy) { t.dummy.g.position.copy(p); t.dummy.update(m.mode, m.vx, dt, m.mode === "dash" ? m.dashDur : m.mode === "air" ? 2 * MOVE.jumpV / MOVE.gravity : undefined); t.dummy.g.rotation.y = pathYaw(t.path, t.sign); }
         const mat = t.head.material as THREE.MeshLambertMaterial; if (i !== live) { mat.color.setHex(0x59626a); mat.emissive.setHex(0); } });
       w.cam.rotation.y = -ctx.input.yaw; w.cam.rotation.x = ctx.input.pitch; w.cam.updateMatrixWorld();
-      ray.setFromCamera(center, w.cam); const hits = ray.intersectObjects([head, ...cover], true); const hit = hits.length > 0 && hits[0].object === head; tot += dt;
+      ray.setFromCamera(center, w.cam); const hits = ray.intersectObjects([head, ...cover], true); const firing = ctx.weapon ? ctx.weapon.hold(dt) : true; const hit = firing && hits.length > 0 && hits[0].object === head; tot += dt;
       if (hit) { on += dt; const before = Math.floor(streak / 3); streak += dt; best = Math.max(best, streak); if (Math.floor(streak / 3) > before) { ctx.sfx.play("countdown", 0.6); ctx.fx.label(null, `${Math.floor(streak)} s streak`, "#e8a93c", "streakMeter"); } }
       else { if (streak > 1) ctx.fx.label(null, "lost target", "#9aa4a8", "missFeedback"); streak = 0; }
     },

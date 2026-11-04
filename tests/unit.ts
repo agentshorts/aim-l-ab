@@ -3,6 +3,7 @@ import { SFX } from "../core/sfx_synth";
 import { readFileSync } from "fs";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { LEVEL_DEFS, LEVEL_ORDER, pathPoint, pathLen, pathYaw, pathModes, aimAngles } from "../drills/deadlock-tracking/levels";
+import { HERO_WEAPONS, heroWeapon, Weapon } from "../core/heroes";
 import { MODEL_NAMES, MODEL_VERSION, stripRootMotion } from "../core/models";
 import { clipFor, facingFor } from "../drills/deadlock-tracking/dummy";
 import { PROFILES, sampleQ } from "../drills/deadlock-tracking/profile";
@@ -112,5 +113,11 @@ ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToC
   ok("level system: zipline only on paths with a cable", pathModes(lane, ["walk", "zip"]).join() === "walk" && pathModes({ ...lane, zip: true }, ["walk", "zip"]).join() === "walk,zip");
   const a = aimAngles(new THREE.Vector3(0, 9.7, 0), new THREE.Vector3(0, 1.7, -8)); ok("level system: aim angles look down at a target below", Math.abs(a.yaw) < 1e-9 && Math.abs(a.pitch + Math.PI / 4) < 1e-9);
   for (const id of LEVEL_ORDER) { const L = LEVEL_DEFS[id]; ok(`level ${id}: has paths, vantage above ground, paths at least 8 m`, L.paths.length > 0 && L.vantage[1] >= 1.7 && L.paths.every((q) => pathLen(q) >= 8)); } }
+{ ok("hero weapons: 14 heroes, every entry links deadlock.wiki", HERO_WEAPONS.length >= 10 && HERO_WEAPONS.every((h) => h.src.startsWith("https://deadlock.wiki/") && h.bps > 0 && h.ammo > 0 && h.reloadS > 0), `${HERO_WEAPONS.length}`);
+  const g = new Weapon(heroWeapon("lady-geist")!); let n = 0; for (let i = 0; i < 20; i++) if (g.tryFire()) n++; ok("clicks faster than the cadence are dropped", n === 1 && g.blocked === 19);
+  const w = new Weapon(heroWeapon("haze")!); let t = 0, firing = 0; while (t < 10) { if (w.hold(1 / 120)) firing += 1 / 120; t += 1 / 120; }
+  const cyc = 25 / 9.524 + 2.35; ok("held fire: Haze empties 25 at 9.524/s then reloads 2.35 s", Math.abs(firing / 10 - (25 / 9.524) / cyc) < 0.05, `firing ${(100 * firing / 10).toFixed(0)}%`);
+  const a = new Weapon(heroWeapon("abrams")!); a.ammo = 0; a.reload(); ok("Abrams single-shell reload: 0.705 + 9 x 0.3525 = 3.88 s from empty", Math.abs(a.reloadLeft - (0.705 + 9 * 0.3525)) < 1e-9);
+  ok("settings: hero weapon off by default, unknown ids fall back to off", norm2({}).heroWeapon === "off" && norm2({ heroWeapon: "haze" }).heroWeapon === "haze" && norm2({ heroWeapon: "x" }).heroWeapon === "off"); }
 console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);
 })();
