@@ -1,18 +1,19 @@
 import * as THREE from "three";
 import { Drill, DrillCtx } from "../../core/drill";
 import { makeWorld, makeTrooper, zipline, PAL } from "../../core/scene3d";
-import { Mover, Mode } from "./mover";
+import { Mode } from "./mover";
+import { FreeMover, FREE_RATES } from "../../core/freemove";
 import { MOVE } from "../../core/spec";
 import { PROFILES } from "./profile";
 import { DummyView } from "./dummy";
 import { getModel } from "../../core/models";
-import { LEVEL_DEFS, LevelDef, PathDef, buildLevel, pathPoint, pathLen, pathYaw, pathModes, aimAngles } from "./levels";
+import { LEVEL_DEFS, LevelDef, PathDef, buildLevel, pathLen, pathModes, aimAngles, freePoint, freeYaw } from "./levels";
 const LEVELS: { modes: Mode[]; radius: number; bucket: "b1" | "b2" | "b3" }[] = [
   { modes: ["walk"], radius: 0.6, bucket: "b3" }, { modes: ["walk", "dash"], radius: 0.5, bucket: "b2" },
   { modes: ["walk", "dash", "slide", "air"], radius: 0.42, bucket: "b1" }, { modes: ["walk", "dash", "slide", "air", "zip"], radius: 0.36, bucket: "b1" } ];
 /** The original street lane, expressed as a level: player at the origin, one path 15 m out, zipline overhead. */
 const LANE: LevelDef = { id: "lane", title: "Tracking: movement tech", sub: "", vantage: [0, 1.7, 0], paths: [{ a: [-9, 0, -15], b: [9, 0, -15], zip: true }], props: [] };
-type Target = { path: PathDef; mover: Mover; head: THREE.Mesh; hero: ReturnType<typeof makeTrooper>; dummy: DummyView | null; sign: number };
+type Target = { path: PathDef; mover: FreeMover; head: THREE.Mesh; hero: ReturnType<typeof makeTrooper>; dummy: DummyView | null; sign: number };
 export function trackingDrill(levelId?: string): Drill {
   const L = (levelId && LEVEL_DEFS[levelId]) || LANE; const isLane = L === LANE;
   let w: ReturnType<typeof makeWorld>, ctx: DrillCtx, lvl = LEVELS[1]; let on = 0, tot = 0, best = 0, streak = 0;
@@ -21,10 +22,11 @@ export function trackingDrill(levelId?: string): Drill {
   const nT = Math.max(1, L.targets ?? 1);
   for (let i = 0; i < nT; i++) { const head = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshLambertMaterial({ color: PAL.amber, emissive: 0x3a2200 }));
     const hero = makeTrooper("enemy", "ranged"); hero.bar.visible = false; T.push({ path: L.paths[i % L.paths.length], mover: null as any, head, hero, dummy: null, sign: 1 }); }
-  let mover: Mover; let head: THREE.Mesh;
+  let mover: FreeMover; let head: THREE.Mesh;
   const mk = () => { lvl = LEVELS[ctx.settings.difficulty] ?? LEVELS[1];
-    for (const t of T) { const m = new Mover(pathModes(t.path, lvl.modes), (Math.random() * 1e9) | 0, PROFILES[ctx.settings.moveProfile] ?? PROFILES.classic); m.dashPeak = MOVE.dash[lvl.bucket].peak; m.dashDur = MOVE.dash[lvl.bucket].dur;
-      m.lim = pathLen(t.path) / 2; if (!isLane) m.x = (Math.random() - 0.5) * m.lim; t.mover = m; }
+    // free movement (#51): any direction inside a box around the path (half-length along, path.lat across, default 2.5 m ESTIMATED)
+    for (const t of T) { const lim = pathLen(t.path) / 2, lat = t.path.lat ?? 2.5; const m = new FreeMover(pathModes(t.path, lvl.modes), { u0: -lim, u1: lim, v0: -lat, v1: lat }, FREE_RATES[ctx.settings.difficulty] ?? FREE_RATES[1], (Math.random() * 1e9) | 0);
+      m.dashPeak = MOVE.dash[lvl.bucket].peak; m.dashDur = MOVE.dash[lvl.bucket].dur; if (!isLane) m.u = (Math.random() - 0.5) * lim; t.mover = m; }
     live = 0; tSwitch = 0; mover = T[0].mover; head = T[0].head; };
   const drill: Drill = {
     holdsFire: true, id: isLane ? "deadlock-tracking" : `deadlock-tracking-${L.id}`, title: isLane ? L.title : `Tracking: ${L.title}`, primary: "on-target %",
@@ -42,9 +44,9 @@ export function trackingDrill(levelId?: string): Drill {
     update(dt) {
       if (dt <= 0) return;
       if (T.length > 1 && (tSwitch += dt) >= (L.switchS ?? 4)) { tSwitch = 0; live = (live + 1) % T.length; mover = T[live].mover; head = T[live].head; }
-      T.forEach((t, i) => { const m = t.mover; m.step(dt); const p = pathPoint(t.path, m.x, m.y); if (Math.abs(m.vx) > 0.05) t.sign = Math.sign(m.vx);
+      T.forEach((t, i) => { const m = t.mover; m.step(dt); const p = freePoint(t.path, m.u, m.v, m.y);
         t.head.scale.setScalar(i === live ? lvl.radius : lvl.radius * 0.8); t.head.position.set(p.x, p.y + 1.7, p.z); t.hero.g.position.copy(p);
-        if (t.dummy) { t.dummy.g.position.copy(p); t.dummy.update(m.mode, m.vx, dt, m.mode === "dash" ? m.dashDur : m.mode === "air" ? 2 * MOVE.jumpV / MOVE.gravity : undefined); t.dummy.g.rotation.y = pathYaw(t.path, t.sign); }
+        if (t.dummy) { t.dummy.g.position.copy(p); t.dummy.update(m.mode, m.speed, dt, m.mode === "dash" ? m.dashDur : m.mode === "air" ? 2 * MOVE.jumpV / MOVE.gravity : undefined); if (m.speed > 0.05) { const f = freeYaw(t.path, m.vu, m.vv); t.dummy.g.rotation.y = f; t.dummy.face = f; } else t.dummy.g.rotation.y = t.dummy.face; }
         const mat = t.head.material as THREE.MeshLambertMaterial; if (i !== live) { mat.color.setHex(0x59626a); mat.emissive.setHex(0); } });
       w.cam.rotation.y = -ctx.input.yaw; w.cam.rotation.x = ctx.input.pitch; w.cam.updateMatrixWorld();
       ray.setFromCamera(center, w.cam); const hits = ray.intersectObjects([head, ...cover], true); const firing = ctx.weapon ? ctx.weapon.hold(dt) : true; const hit = firing && hits.length > 0 && hits[0].object === head; tot += dt;

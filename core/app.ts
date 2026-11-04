@@ -1,3 +1,4 @@
+import { coverFireDrill } from "../drills/deadlock-cover-fire/drill";
 import themeCss from "./theme.css";
 import { getStore, Store } from "./storage";
 import { renderHub } from "./hub";
@@ -18,7 +19,7 @@ export function mount(el: HTMLElement, opts: MountOpts = {}) {
     cur?.dispose(); cur = null; el.replaceChildren(); const r = location.hash.replace(/^#\/?/, "");
     const nav = (x: string) => { location.hash = "#/" + x; };
     const tl = r.startsWith("tracking/") ? r.slice(9) : undefined;
-    if (r === "souls" || r === "tracking" || tl) { await Promise.race([modelsReady(), new Promise((res) => setTimeout(res, 4000))]); const d = r === "souls" ? soulsDrill() : trackingDrill(tl); const sh = await runDrill(el, d, store, nav); cur = sh; api.drill = sh; api.hooks = d.hooks; }
+    if (r === "souls" || r === "tracking" || r === "cover" || tl) { await Promise.race([modelsReady(), new Promise((res) => setTimeout(res, 4000))]); const d = r === "souls" ? soulsDrill() : r === "cover" ? coverFireDrill() : trackingDrill(tl); const sh = await runDrill(el, d, store, nav); cur = sh; api.drill = sh; api.hooks = d.hooks; }
     else { await renderHub(el, store, nav); api.drill = null; }
     api.route = r; el.dispatchEvent(new CustomEvent("aimlab:route", { detail: r }));
   };

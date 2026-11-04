@@ -6,7 +6,7 @@ import type { Mode } from "./mover";
 // that make the space (asset pack models, or code shapes where no model exists yet: platforms, ramps, bridge decks).
 export type V3 = [number, number, number];
 /** A target walks back and forth between a and b (the mover's x maps onto the segment; jumps add to the path height). */
-export interface PathDef { a: V3; b: V3; zip?: boolean }
+export interface PathDef { a: V3; b: V3; zip?: boolean; /** free-movement half-width across the path, m (default 2.5, ESTIMATED; narrower on ledges and the bridge) */ lat?: number }
 export type PropDef =
   /** Asset pack model. sv scales per axis (model space); fallback is the code-shape stand-in built when the model fails to load. */
   | { model: ModelName; p: V3; ry?: number; s?: number; sv?: V3; fallback?: PropDef[] }
@@ -63,19 +63,26 @@ addLevel({ id: "high-ground", title: "High ground", sub: "You hold a raised plat
     { model: "wall_straight", p: [4, 0, -9] }, { model: "building_guardhouse", p: [-8, 0, -22], ry: 0.3 }, { model: "building_tower", p: [12, 0, -24] }] });
 addLevel({ id: "bridge", title: "Bridge over the lane", sub: "You stand on a bridge. Targets run up the lane toward the bridge; follow them down as they close in below you.",
   vantage: [0, 6.7, 0], pitch0: -0.3,
-  paths: [{ a: [-3, 0, -26], b: [1, 0, -3] }],
+  paths: [{ a: [-3, 0, -26], b: [1, 0, -3], lat: 3 }],
   // bridge_deck_30m_v2 runs along Z (deck top Y 5.0, 3.2 m wide); turned 90 degrees so it spans the lane along X
   props: [{ model: "bridge_deck_30m", p: [0, 0, 0], ry: Math.PI / 2, fallback: [{ box: [30, 0.6, 3], p: [0, 5, 0], color: 0x6b4a2e }, { box: [30, 0.9, 0.15], p: [0, 5.9, -1.45], color: 0x9aa7a3 }, { box: [30, 0.9, 0.15], p: [0, 5.9, 1.45], color: 0x9aa7a3 },
     { box: [1, 4.4, 1], p: [-7, 4.4, 0] }, { box: [1, 4.4, 1], p: [7, 4.4, 0] }] },
     { model: "wall_straight", p: [-7, 0, -10], ry: Math.PI / 2 }, { model: "wall_straight", p: [7, 0, -16], ry: Math.PI / 2 }, { model: "building_guardhouse", p: [-11, 0, -24], ry: -0.4 }, { model: "building_tower", p: [10, 0, -30] }] });
 addLevel({ id: "elevated-targets", title: "Targets on high ground", sub: "Targets strafe along a rooftop ledge above you. Track upward and hold through the low cover on the ledge.",
   vantage: [0, 1.7, -2], pitch0: 0.4,
-  paths: [{ a: [-10, 6, -16], b: [10, 6, -16] }],
+  paths: [{ a: [-10, 6, -16], b: [10, 6, -16], lat: 1.5 }], // ledge is 5 m deep; 1.5 m keeps them on it
   props: [{ box: [24, 6, 5], p: [0, 6, -17], tiles: true }, { model: "wall_corner", p: [-6, 6, -14.6] }, { model: "wall_corner", p: [5, 6, -14.6], ry: -Math.PI / 2 },
     { model: "wall_straight", p: [-5, 0, -7] }, { model: "building_tower", p: [14, 0, -16] }, { model: "building_guardhouse", p: [-15, 0, -14], ry: Math.PI / 2 }] });
 addLevel({ id: "multi-path", title: "Multi-path", sub: "Three targets on three paths: across, away from you, and up a ramp. Only the lit head counts, and it moves to another target every 4 s.",
   vantage: [0, 1.7, 0], targets: 3, switchS: 4,
-  paths: [{ a: [-10, 0, -13], b: [10, 0, -13] }, { a: [7, 0, -8], b: [11, 0, -26] }, { a: [-9, 0, -9], b: [-5, 4.5, -25] }],
+  paths: [{ a: [-10, 0, -13], b: [10, 0, -13] }, { a: [7, 0, -8], b: [11, 0, -26] }, { a: [-9, 0, -9], b: [-5, 4.5, -25], lat: 1 }], // ramp is 2.5 m wide
   props: [// ramp_17m_v1 runs along +Z from its low end (rises to Y 4.5 at Z 17); placed at the path start, Z squashed to the 16.49 m run
     { model: "ramp_17m", p: [-9, 0, -9], ry: Math.atan2(4, -16), sv: [1, 1, Math.hypot(4, 16) / 17], fallback: [{ box: [2.5, 0.4, 17.2], p: [-7, 2.25, -17], ry: Math.atan2(4, -16), tilt: -Math.atan2(4.5, 16.5), color: 0x6b4a2e }] }, { box: [5, 4.5, 5], p: [-5, 4.5, -27.5], tiles: true },
     { model: "wall_straight", p: [4, 0, -18] }, { model: "building_guardhouse", p: [0, 0, -24] }, { model: "building_tower", p: [15, 0, -30] }] });
+
+/** horizontal unit vectors along the path and across it (across points from a toward the player side for the lane) */
+export function pathAxes(p: PathDef) { const dx = p.b[0] - p.a[0], dz = p.b[2] - p.a[2], n = Math.hypot(dx, dz) || 1; return { au: [dx / n, dz / n], av: [-dz / n, dx / n] }; }
+/** free-movement point: along u, across v, height y above the path surface */
+export function freePoint(p: PathDef, u: number, v: number, y: number): THREE.Vector3 { const q = pathPoint(p, u, y), { av } = pathAxes(p); q.x += av[0] * v; q.z += av[1] * v; return q; }
+/** facing for a velocity in path coordinates (clips travel along local +Z) */
+export function freeYaw(p: PathDef, vu: number, vv: number) { const { au, av } = pathAxes(p); return Math.atan2(au[0] * vu + av[0] * vv, au[1] * vu + av[1] * vv); }

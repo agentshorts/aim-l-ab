@@ -13,6 +13,8 @@ import { normalize as norm2, CUE_KEYS as CK } from "../core/settings";
 import { SoulSim } from "../drills/deadlock-souls/sim";
 import { Mover } from "../drills/deadlock-tracking/mover";
 import { MOVE, TROOPER, ORB } from "../core/spec";
+import { FreeMover, FREE_RATES } from "../core/freemove";
+import { CoverSim, Peek, DIFFS, ROWS, PEEK_S } from "../drills/deadlock-cover-fire/sim";
 import { cm360ToDeadlockSens, deadlockSensToCm360, radPerCountFromCm360 } from "../core/sens";
 import { parseShare, loadCrosshair, DEFAULT_CROSSHAIR, toShare, CROSSHAIR_KEY, pipOffset } from "../core/crosshair";
 import { Session } from "../core/session";
@@ -119,5 +121,29 @@ ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToC
   const cyc = 25 / 9.524 + 2.35; ok("held fire: Haze empties 25 at 9.524/s then reloads 2.35 s", Math.abs(firing / 10 - (25 / 9.524) / cyc) < 0.05, `firing ${(100 * firing / 10).toFixed(0)}%`);
   const a = new Weapon(heroWeapon("abrams")!); a.ammo = 0; a.reload(); ok("Abrams single-shell reload: 0.705 + 9 x 0.3525 = 3.88 s from empty", Math.abs(a.reloadLeft - (0.705 + 9 * 0.3525)) < 1e-9);
   ok("settings: hero weapon off by default, unknown ids fall back to off", norm2({}).heroWeapon === "off" && norm2({ heroWeapon: "haze" }).heroWeapon === "haze" && norm2({ heroWeapon: "x" }).heroWeapon === "off"); }
+{ const pk = new Peek(); const dt = 1 / 120; pk.step(dt, true); const sOut = pk.state; let t = dt; while (pk.state !== "peeked" && t < 1) { pk.step(dt, true); t += dt; }
+  ok("cover fire peek: cover -> out -> peeked in PEEK_S, only peeked can shoot", sOut === "out" && Math.abs(t - PEEK_S) < 2 * dt && pk.canShoot, `${t.toFixed(3)} s`);
+  pk.step(dt, false); const sb = pk.state, sh = pk.canShoot; for (let i = 0; i < 60; i++) pk.step(dt, false); ok("cover fire peek: release -> back -> cover, no illegal transitions", sb === "back" && !sh && pk.state === "cover" && pk.illegal === 0);
+  ok("cover fire layout: last cover row is inside lose distance on every difficulty, first row far outside", DIFFS.every((d) => Math.hypot(2, ROWS[ROWS.length - 1]) <= d.loseDist && ROWS[0] > d.loseDist * 4));
+  const idle = new CoverSim(DIFFS[1], 11); let n = 0; while (idle.round === "running" && n++ < 120 * 120) idle.step(dt);
+  ok("cover fire: nobody shooting means an enemy reaches you and the round is lost", idle.round === "lost" && idle.enemies.some((e) => e.state === "reached") && idle.closest <= DIFFS[1].loseDist, `lost at ${idle.t.toFixed(1)} s`);
+  const h = new CoverSim(DIFFS[1], 12); const e0 = h.enemies[0]; ok("cover fire: hidden or spawning enemies take no damage", h.damage(e0.id, 99) === "blocked" && e0.hp === e0.max);
+  const g = new CoverSim(DIFFS[2], 13); let vmax = 0, kills0 = 0; for (let i = 0; i < 120 * 90 && g.round === "running"; i++) { g.step(dt); for (const e of g.exposed()) { vmax = Math.max(vmax, Math.hypot(e.vx, e.vz)); if (e.legT > 0.25) g.damage(e.id, dt); } }
+  kills0 = g.kills; ok("cover fire: a good tracker (on every exposed enemy after 0.25 s) holds 90 s on Hard with kills", g.round === "running" && kills0 > 10, `kills ${kills0}, closest ${g.closest.toFixed(1)} m`);
+  ok("cover fire: enemies dash at spec peak speed (579 u/s) and never exceed it", vmax > MOVE.dash.b2.peak * 0.9 && vmax <= MOVE.dash.b2.peak + 1e-6, `${vmax.toFixed(2)} m/s`);
+  ok("cover fire: enemy state machine has no illegal transitions", [idle, h, g].every((s) => s.enemies.every((e) => e.illegal === 0))); }
+{ const box = { u0: -9, u1: 9, v0: -2.5, v1: 2.5 }; const all = ["walk", "dash", "slide", "air", "zip"] as any; const counts: number[] = []; let inBox = true, quad = new Set<string>(), illegal = 0, vmax = 0, top = 0;
+  for (let lv = 0; lv < 4; lv++) { const m = new FreeMover(all, box, FREE_RATES[lv], 21 + lv); for (let i = 0; i < 144 * 120; i++) { m.step(1 / 144);
+      if (m.u < box.u0 - 1e-9 || m.u > box.u1 + 1e-9 || m.v < box.v0 - 1e-9 || m.v > box.v1 + 1e-9 || m.y < 0) inBox = false; if (m.speed > 1) quad.add(`${Math.sign(m.vu)},${Math.sign(m.vv)}`);
+      if (m.mode === "dash") vmax = Math.max(vmax, m.speed); if (m.mode === "air" && m.log.length > 1 && m.log[m.log.length - 2].mode !== "zip") top = Math.max(top, m.y); }
+    counts.push(m.turns + m.dashes + m.jumps); illegal += m.illegal; }
+  ok("free movement: 2 min per difficulty stays inside the box, no illegal transitions", inBox && illegal === 0);
+  ok("free movement: moves in all four quadrants (left/right and toward/away)", quad.size >= 8, [...quad].join(" "));
+  ok("free movement: turns, dashes and jumps get more frequent with difficulty", counts.every((c, i) => i === 0 || c > counts[i - 1]), counts.join(" < "));
+  ok("free movement: dash peak is the spec peak, jump apex about 1.14 m (zip drops excluded)", vmax <= MOVE.dash.b2.peak + 1e-6 && vmax > MOVE.dash.b2.peak * 0.95 && top > 1.0 && top < 1.3, `dash ${vmax.toFixed(2)} m/s, apex ${top.toFixed(2)} m`);
+  const g = new CoverSim(DIFFS[3], 31, 3); let lat = 0, back = 0, jumps = 0; for (let i = 0; i < 120 * 60 && g.round === "running"; i++) { g.step(1 / 120);
+    for (const e of g.exposed()) { if (!e.dashing && Math.abs(e.vx * (e.toZ - e.z) - e.vz * (e.toX - e.x)) / (Math.hypot(e.toX - e.x, e.toZ - e.z) || 1) > 2) lat++; if (!e.dashing && e.back > 0) back++; } }
+  jumps = g.enemies.reduce((a, e) => a + e.jumps, 0) + g.kills;
+  ok("cover fire free movement: enemies strafe sideways, step back and jump between covers, inside the arena", lat > 50 && back > 10 && g.enemies.every((e) => Math.abs(e.x) <= 10), `strafe frames ${lat}, back frames ${back}`); }
 console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);
 })();

@@ -62,7 +62,7 @@ export async function runDrill(root: HTMLElement, drill: Drill, store: Store, na
     let clicks = input.consume(now); const sdt = session.step(dt); const wp = wctx.weapon;
     // hero weapon: tracking holds fire inside the drill; elsewhere each click is a trigger pull limited by cadence and ammo
     if (wp && session.phase === "running") { if (drill.holdsFire) wp.update(0); else { wp.update(sdt); clicks = clicks.filter(() => wp.tryFire()); } }
-    drill.update(sdt, session.phase === "running" ? clicks : [], now); if (wp) ammo.textContent = wp.label(); drill.render(); fx.draw(now / 1000);
+    drill.update(sdt, session.phase === "running" ? clicks : [], now); if (session.phase === "running" && drill.ended?.()) session.go("results"); if (wp) ammo.textContent = wp.label(); drill.render(); fx.draw(now / 1000);
     if (session.phase === "countdown") { const n = Math.ceil(session.countdown); if (n !== lastCount) { lastCount = n; sfx.play("countdown"); } }
     timer.textContent = session.phase === "countdown" ? String(Math.ceil(session.countdown)) : session.phase === "running" || session.phase === "paused" ? session.remaining().toFixed(1) : "";
     const v = drill.hud(); stats.forEach((s, i) => s.set(v[i] ?? ""));

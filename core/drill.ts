@@ -12,5 +12,6 @@ export interface Drill {
   update(dt: number, clicks: number[], now: number): void; render(): void; hud(): string[];
   result(): { score: number; metrics: Record<string, number> }; resize(): void; hooks?: Record<string, any>;
   /** true when the drill simulates a held trigger itself (tracking) instead of using clicks */ holdsFire?: boolean;
+  /** true when the drill ended the round itself (cover fire: an enemy reached you); the shell then goes to results */ ended?(): boolean;
 }
 export type { RunResult };

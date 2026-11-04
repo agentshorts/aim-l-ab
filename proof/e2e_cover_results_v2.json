@@ -1,0 +1,88 @@
+{
+ "run1": {
+  "peekedSeen": 1,
+  "dbg": {
+   "none": 72,
+   "wall": 3,
+   "cover": 409,
+   "enemy": 28,
+   "exposedFrames": 302
+  },
+  "result": {
+   "score": 550,
+   "metrics": {
+    "kills": 2,
+    "survivedS": 20,
+    "lost": 0,
+    "closestM": 12.32,
+    "onTargetPct": 8.6,
+    "bestTrackS": 0.32,
+    "peekedPct": 98.9,
+    "dashes": 1,
+    "illegalTransitions": 0
+   }
+  },
+  "sfx": [
+   "countdown",
+   "go",
+   "hit",
+   "kill"
+  ]
+ },
+ "run2ms": 33730,
+ "run2": {
+  "round": "lost",
+  "result": {
+   "score": 95,
+   "metrics": {
+    "kills": 0,
+    "survivedS": 19,
+    "lost": 1,
+    "closestM": 5.39,
+    "onTargetPct": 0,
+    "bestTrackS": 0,
+    "peekedPct": 0,
+    "dashes": 3,
+    "illegalTransitions": 0
+   }
+  },
+  "saved": 2
+ },
+ "hubBest": "545",
+ "trackingFree": {
+  "quads": [
+   "1,1",
+   "1,-1",
+   "-1,1",
+   "-1,0",
+   "-1,-1",
+   "0,-1",
+   "1,0"
+  ],
+  "modes": [
+   "walk"
+  ],
+  "result": {
+   "score": 99.8,
+   "metrics": {
+    "onTargetPct": 99.8,
+    "bestStreakS": 19.95,
+    "seconds": 20,
+    "modeChanges": 0,
+    "illegalTransitions": 0
+   }
+  }
+ },
+ "checks": {
+  "trackingFree": true,
+  "peeked": true,
+  "run1Kills": true,
+  "run1Survived": true,
+  "run2Lost": true,
+  "run2Early": true,
+  "hubSaved": true,
+  "noIllegal": true
+ },
+ "errors": [],
+ "pass": true
+}
