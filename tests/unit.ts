@@ -1,31 +1,53 @@
 import { SoulSim } from "../drills/deadlock-souls/sim";
 import { Mover } from "../drills/deadlock-tracking/mover";
 import { MOVE, TROOPER, ORB } from "../core/spec";
+import { cm360ToDeadlockSens, deadlockSensToCm360, radPerCountFromCm360 } from "../core/sens";
+import { parseShare, loadCrosshair, DEFAULT_CROSSHAIR, toShare, CROSSHAIR_KEY } from "../core/crosshair";
+import { Session } from "../core/session";
+import { LocalStore } from "../core/storage";
 let fails = 0; const ok = (name: string, c: boolean, info = "") => { console.log(`${c ? "PASS" : "FAIL"} ${name} ${info}`); if (!c) fails++; };
 const near = (a: number, b: number, e = 1e-6) => Math.abs(a - b) <= e;
+(async () => {
 { const s = new SoulSim({ perSide: 1, variance: 0, playerDamage: 40, oppReact: 5, seed: 1 }); const e = s.troopers[1];
-  s.step(0.5); ok("trooper HP drop per tick = 35 dps * 0.5 s", near(e.hp, 300 - 17.5), `hp=${e.hp}`);
-  s.step(4.0); ok("after 9 ticks", near(e.hp, 300 - 9 * 17.5), `hp=${e.hp}`);
+  s.step(0.5); ok("trooper HP drop per tick = 35 dps * 0.5 s = 17.5", near(e.hp, 300 - 17.5), `hp=${e.hp}`);
   for (let i = 0; i < 2000 && e.alive; i++) s.step(0.01); ok("ranged 300 hp dies at 9.0 s (18 ticks)", near(s.t, 9.0, 0.011), `t=${s.t.toFixed(3)}`);
-  const o = s.orbs.find((x) => x.owner === "ally"); ok("orb spawns on death, floating share 50 of 100", !!o && TROOPER.bounty0 * TROOPER.floatingShare === 50);
-}
+  ok("orb spawns on death, floating share 50 of 100", s.orbs.some((o) => o.owner === "ally") && TROOPER.bounty0 * TROOPER.floatingShare === 50);
+  ok("wave phase cleared, respawns after delay", s.wave === "cleared"); for (let i = 0; i < 200; i++) s.step(0.01); ok("new wave spawned", s.wave === "fighting" && s.waves === 2); }
 { const s = new SoulSim({ perSide: 1, variance: 0, playerDamage: 40, oppReact: 0, seed: 1 });
-  while (!s.orbs.length) s.step(0.001); const born = s.orbs.map(o => o.born)[0];
-  while (s.orbs.some(o => o.owner === "ally" && !o.claimed)) s.step(0.001);
-  const deny = s.events.find((e) => e.type === "oppdeny"); ok("opponent cannot deny before light-up + 80 ms grace", !!deny && deny.t - born >= ORB.lightUp + ORB.grace - 1e-6, `at ${((deny!.t - born) * 1000).toFixed(0)} ms`);
-}
+  while (!s.orbs.length) s.step(0.001); const born = s.orbs[0].born; while (s.orbs.some((o) => o.owner === "ally" && o.state !== "claimed")) s.step(0.001);
+  const d = s.events.find((e) => e.type === "oppDeny"); ok("opponent cannot deny before light-up + 80 ms grace", !!d && d.t - born >= ORB.lightUp + ORB.grace - 1e-6, `at ${((d!.t - born) * 1000).toFixed(0)} ms`); }
 { const s = new SoulSim({ perSide: 1, variance: 0, playerDamage: 40, oppReact: 9, seed: 1 });
-  while (!s.orbs.length) s.step(0.001); const born = s.orbs[0].born; while (s.orbs.length && !s.orbs.every(o => o.claimed)) s.step(0.001);
-  const p = s.events.find((e) => e.type === "pop"); ok("unclaimed orb pops at ~1.0 s", !!p && near(p.t - born, ORB.pop, 0.002), `${((p!.t - born) * 1000).toFixed(0)} ms`);
-}
+  while (!s.orbs.length) s.step(0.001); const born = s.orbs[0].born; while (s.orbs.some((o) => o.state !== "claimed")) s.step(0.001);
+  const p = s.events.find((e) => e.type === "popOwner"); ok("unclaimed orb pops at 1.0 s to owner (not counted lost)", !!p && near(p.t - born, ORB.pop, 0.002), `${((p!.t - born) * 1000).toFixed(0)} ms`); }
 { const s = new SoulSim({ perSide: 1, variance: 0, playerDamage: 40, oppReact: 9, seed: 1 }); const e = s.troopers[1];
-  while (e.windowAt === undefined) s.step(0.001); const r = s.shootTrooper(e) as any; ok("last hit on window open: error ~0 ms, kill", r.res === "lasthit" && Math.abs(r.errMs) <= 1.01, `err=${r.errMs.toFixed(2)} ms hp window opens at ${e.windowAt?.toFixed(3)} s`);
-  const o = s.orbs[0]; s.step(0.1); ok("orb shot before light-up = early", s.shootOrb(o).res === "early"); s.step(0.0501); const r2 = s.shootOrb(o); ok("orb shot at light-up = secure, err ~0", r2.res === "secure" && Math.abs(r2.errMs) < 1, `err=${r2.errMs.toFixed(2)} ms`);
-}
-{ const m = new Mover(["dash"]); m.set("dash"); let peak = 0, dist = 0, t = 0; const dt = 1 / 1000; while (m.mode === "dash") { const v = Math.abs(m.vx); m.step(dt); peak = Math.max(peak, Math.abs(m.vx)); dist += Math.abs(m.vx) * dt; t += dt; }
-  ok("dash peak = 635 u/s = 16.13 m/s", near(peak, 635 * 0.0254, 0.05), `peak=${peak.toFixed(2)}`); ok("dash duration 0.62 s", near(t, 0.62, 0.002), `t=${t.toFixed(3)}`); console.log(`INFO dash distance (EST model) ${dist.toFixed(2)} m`); }
-{ const m = new Mover(["air"]); m.set("air"); let top = 0; while (m.mode === "air") { m.step(1 / 1000); top = Math.max(top, m.y); }
-  ok("jump apex = 45 u = 1.143 m", near(top, 45 * 0.0254, 0.01), `apex=${top.toFixed(3)}`); }
-{ const m = new Mover(["zip"]); m.x = -8; m.dir = 1; m.set("zip"); m.dir = 1; m.step(0.1); ok("zipline 18 m/s", near(Math.abs(m.vx), 18), `v=${m.vx}`); }
+  while (e.windowAt === undefined) s.step(0.001); const r = s.shootTrooper(e); ok("last hit at window open: error ~0 ms", r.res === "lasthit" && Math.abs(r.errMs) <= 1.01, `err=${r.errMs.toFixed(2)} ms`);
+  const o = s.orbs[0]; s.step(0.1); ok("orb shot while dark = early", s.shootOrb(o).res === "early"); s.step(0.0501); const r2 = s.shootOrb(o); ok("orb shot at light-up = secure, err ~0", r2.res === "secure" && Math.abs(r2.errMs) < 1, `err=${r2.errMs.toFixed(2)} ms`);
+  ok("claimed orb cannot be claimed twice", s.shootOrb(o).res === "late"); }
+{ const m = new Mover(["dash"]); m.set("dash"); let peak = 0, t = 0, dist = 0; const dt = 1 / 1000; while (m.mode === "dash") { m.step(dt); peak = Math.max(peak, Math.abs(m.vx)); dist += Math.abs(m.vx) * dt; t += dt; }
+  ok("dash peak = 635 u/s = 16.13 m/s", near(peak, 635 * 0.0254, 0.05), `peak=${peak.toFixed(2)}`); ok("dash duration 0.62 s", near(t, 0.62, 0.002), `t=${t.toFixed(3)} dist=${dist.toFixed(2)} m (EST)`); }
+{ const m = new Mover(["air"]); m.set("air"); let top = 0; while (m.mode === "air") { m.step(1 / 1000); top = Math.max(top, m.y); } ok("jump apex = 45 u = 1.143 m", near(top, 45 * 0.0254, 0.01), `apex=${top.toFixed(3)}`); }
+{ const m = new Mover(["zip"]); m.x = -8; m.set("zip"); m.dir = 1; m.step(0.1); ok("zipline 18 m/s", near(Math.abs(m.vx), 18), `v=${m.vx}`);
+  for (let i = 0; i < 2000 && m.mode !== "walk"; i++) m.step(0.005); ok("zip ends by dropping (air) then landing, no teleport", m.log.map((l) => l.mode).join(">") === "zip>air>walk", m.log.map((l) => l.mode).join(">"));
+  const m2 = new Mover(["walk"]); m2.set("slide"); ok("illegal transition walk>slide rejected", m2.illegal === 1 && m2.mode === "walk"); }
+{ const m = new Mover(["walk", "dash", "slide", "air", "zip"], 11); for (let i = 0; i < 60000; i++) m.step(1 / 144); ok("60k random steps: no illegal transitions, stays in bounds", m.illegal === 0 && Math.abs(m.x) <= 9 && m.y >= 0, `changes=${m.log.length}`); }
 ok("gravity derived 24.56 m/s^2", near(MOVE.gravity, 24.564, 0.01), MOVE.gravity.toFixed(3));
+// sensitivity math
+ok("deadlock sens 1 @ 800 dpi = 25.98 cm/360", near(deadlockSensToCm360(1, 800), 25.977, 0.01), deadlockSensToCm360(1, 800).toFixed(3));
+ok("cm360 <-> deadlock sens roundtrip", near(cm360ToDeadlockSens(deadlockSensToCm360(0.73, 1600), 1600), 0.73, 1e-9));
+{ const k = radPerCountFromCm360(35, 800); const counts = (35 / 2.54) * 800; ok("35 cm of counts at 800 dpi = exactly 2*pi", near(counts * k, 2 * Math.PI, 1e-9)); }
+// crosshair parsing and precedence
+{ const mem: any = { [CROSSHAIR_KEY]: JSON.stringify({ ...DEFAULT_CROSSHAIR, r: 255, gap: 2 }) }; const ls = { getItem: (k: string) => mem[k] ?? null };
+  ok("defaults when nothing set", loadCrosshair("", { getItem: () => null }).source === "default" && loadCrosshair("", { getItem: () => null }).cfg.g === 245);
+  ok("localStorage used when no ?ch", loadCrosshair("", ls).source === "localStorage" && loadCrosshair("", ls).cfg.r === 255);
+  const u = loadCrosshair("?ch=10,20,30,-1,3,8,0.5,1,0.2,1,0", ls); ok("?ch wins over localStorage, 11 values in order, booleans 0/1", u.source === "url" && u.cfg.r === 10 && u.cfg.gap === -1 && u.cfg.height === 8 && u.cfg.pipBorder === true && u.cfg.staticGap === false);
+  ok("bad ?ch (wrong count) falls back", loadCrosshair("?ch=1,2,3", ls).source === "localStorage"); ok("share roundtrip", toShare(parseShare(toShare(DEFAULT_CROSSHAIR))!) === "0,245,255,-3,4,10,1,0,0,0,1", toShare(DEFAULT_CROSSHAIR)); }
+// session phases
+{ const s = new Session(2); ok("cannot run from idle", !s.go("running")); s.go("countdown"); let tot = 0; for (let i = 0; i < 1000 && s.phase !== "results"; i++) tot += s.step(0.01); ok("countdown 3 s then exactly 2 s of sim time", near(tot, 2, 1e-9) && s.phase === "results", `sim=${tot.toFixed(3)}`); }
+// storage
+{ const mem: any = {}; const st = new LocalStore({ getItem: (k) => mem[k] ?? null, setItem: (k, v) => { mem[k] = v; } });
+  await st.addResult({ drill: "x", at: "2026-01-01T00:00:00Z", difficulty: 1, score: 5, metrics: {} }); const ex = await st.exportAll();
+  const mem2: any = {}; const st2 = new LocalStore({ getItem: (k) => mem2[k] ?? null, setItem: (k, v) => { mem2[k] = v; } }); const n = await st2.importAll(JSON.parse(JSON.stringify(ex))); const n2 = await st2.importAll(ex);
+  ok("export/import roundtrip, dedupe on reimport", n === 1 && n2 === 0 && (await st2.results("x"))[0].score === 5);
+  let threw = false; try { await st2.importAll({ foo: 1 }); } catch { threw = true; } ok("import rejects foreign JSON", threw); }
 console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);
+})();
